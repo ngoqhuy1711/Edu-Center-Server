@@ -1,73 +1,59 @@
 import enum
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Enum
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy import (
+    Column, Integer, Float, String, Text, Boolean, DateTime, ForeignKey, Enum
+)
 
 from app.core.database import Base
 
 
-class PaymentStatus(enum.Enum):
+class PaymentMethodEnum(enum.Enum):
+    CASH = "cash"
+    CREDIT_CARD = "credit_card"
+    BANK_TRANSFER = "bank_transfer"
+    PAYPAL = "paypal"
+    OTHER = "other"
+
+
+class PaymentStatusEnum(enum.Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
     REFUNDED = "refunded"
-    CANCELED = "canceled"
+    CANCELLED = "cancelled"
 
 
-class PaymentMethod(enum.Enum):
-    CREDIT_CARD = "credit_card"
-    PAYPAL = "paypal"
-    BANK_TRANSFER = "bank_transfer"
-    CASH = "cash"
-    OTHER = "other"
-
-
-class PaymentType(enum.Enum):
-    COURSE_PURCHASE = "course_purchase"
-    SUBSCRIPTION = "subscription"
+class PaymentTypeEnum(enum.Enum):
+    TUITION = "tuition"
     MATERIAL = "material"
-    SERVICE = "service"
     OTHER = "other"
 
 
 class Payment(Base):
     __tablename__ = "payments"
 
-    payment_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    payment_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     amount = Column(Float, nullable=False)
-    currency = Column(String(3), default="USD", nullable=False)
-
-    payment_method = Column(Enum(PaymentMethod), nullable=False)
-    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
-
-    payment_type = Column(Enum(PaymentType), default=PaymentType.OTHER, nullable=False)
-    reference_id = Column(Integer, nullable=True)  # Generic reference to the entity being paid for
-
-    transaction_reference = Column(String(255), nullable=True)
-    description = Column(Text, nullable=True)
-
-    # Financial details
-    tax_amount = Column(Float, default=0.0, nullable=False)
-    discount_amount = Column(Float, default=0.0, nullable=False)
-    is_tax_exempt = Column(Boolean, default=False, nullable=False)
-
-    # Billing information
-    billing_address = Column(Text, nullable=True)
-    billing_city = Column(String(100), nullable=True)
-    billing_state = Column(String(100), nullable=True)
-    billing_country = Column(String(100), nullable=True)
-    billing_postal_code = Column(String(20), nullable=True)
-
-    payment_date = Column(DateTime, nullable=True)
-    invoice_number = Column(String(50), nullable=True)
-
-    created_at = Column(DateTime, default=func.current_timestamp(), nullable=False)
-    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp(), nullable=False)
-
-    # Relationships
-    user = relationship("User", back_populates="payments")
-
-    def __repr__(self):
-        return f"<Payment {self.payment_id}: {self.amount} {self.currency} by User {self.user_id}>"
+    currency = Column(String(3), nullable=False, default="USD")
+    payment_method = Column(Enum(PaymentMethodEnum), nullable=False)
+    status = Column(Enum(PaymentStatusEnum), nullable=False, default=PaymentStatusEnum.PENDING)
+    payment_type = Column(Enum(PaymentTypeEnum), nullable=False, default=PaymentTypeEnum.OTHER)
+    reference_id = Column(Integer)
+    transaction_reference = Column(String(255))
+    description = Column(Text)
+    tax_amount = Column(Float, nullable=False, default=0.0)
+    discount_amount = Column(Float, nullable=False, default=0.0)
+    is_tax_exempt = Column(Boolean, default=False)
+    billing_address = Column(Text)
+    billing_city = Column(String(100))
+    billing_state = Column(String(100))
+    billing_country = Column(String(100))
+    billing_postal_code = Column(String(20))
+    payment_date = Column(DateTime(timezone=True))
+    invoice_number = Column(String(50))
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
+    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
+    is_deleted = Column(Boolean, default=False)

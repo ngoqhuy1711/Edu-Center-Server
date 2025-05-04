@@ -1,54 +1,37 @@
 from datetime import datetime
-from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
-
-
-class UserRole(str, Enum):
-    STUDENT = "student"
-    TEACHER = "teacher"
-    ADMIN = "admin"
-    STAFF = "staff"
+from pydantic import BaseModel, ConfigDict
 
 
 class UserBase(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    email: EmailStr
-    full_name: str = Field(..., max_length=100)
-    role: UserRole
-    profile_picture: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
-    phone_number: Optional[str] = Field(None, max_length=20)
-    address: Optional[str] = None
-    bio: Optional[str] = None
-    is_active: bool = True
+    username: str
+    email: str
+    is_active: Optional[bool] = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
+    password: str
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, max_length=100)
-    role: Optional[UserRole] = None
-    profile_picture: Optional[str] = None
-    date_of_birth: Optional[datetime] = None
-    phone_number: Optional[str] = Field(None, max_length=20)
-    address: Optional[str] = None
-    bio: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[str] = None
     is_active: Optional[bool] = None
-    password: Optional[str] = Field(None, min_length=8)
+    is_deleted: Optional[bool] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class UserInDB(UserBase):
+class UserRead(UserBase):
     user_id: int
+    is_deleted: bool
     created_at: datetime
     updated_at: datetime
-    password_hash: str
+    roles: List[str] = []
+    profile: Optional[dict] = None
+    lesson_progress: List[dict] = []
 
-    class Config:
-        orm_mode = True
-
+    model_config = ConfigDict(from_attributes=True)

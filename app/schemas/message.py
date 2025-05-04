@@ -1,29 +1,45 @@
 from datetime import datetime
-from enum import Enum
 from typing import Optional, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+from app.models.message import MessageType
 
 
-class MessageStatus(str, Enum):
-    UNREAD = "unread"
-    READ = "read"
-    ARCHIVED = "archived"
-    DELETED = "deleted"
+class MessageBase(BaseModel):
+    sender_id: Optional[int]
+    recipient_id: Optional[int]
+    message_type: MessageType
+    subject: str
+    content: Optional[str] = None
+    is_read: bool = False
+    read_at: Optional[datetime] = None
+    course_id: Optional[int]
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class MessageType(str, Enum):
-    DIRECT = "direct"
-    COURSE = "course"
-    SYSTEM = "system"
-    NOTIFICATION = "notification"
+class MessageCreate(MessageBase):
+    pass
+
+
+class MessageUpdate(BaseModel):
+    subject: Optional[str] = None
+    content: Optional[str] = None
+    is_read: Optional[bool] = None
+    read_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MessageAttachmentBase(BaseModel):
+    message_id: int
     file_name: str
     file_path: str
     file_type: Optional[str] = None
     file_size: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MessageAttachmentCreate(MessageAttachmentBase):
@@ -32,46 +48,31 @@ class MessageAttachmentCreate(MessageAttachmentBase):
 
 class MessageAttachmentInDB(MessageAttachmentBase):
     attachment_id: int
-    message_id: int
     created_at: datetime
+    updated_at: datetime
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    is_deleted: bool
 
-    class Config:
-        orm_mode = True
-
-
-class MessageBase(BaseModel):
-    subject: Optional[str] = None
-    content: str
-    message_type: MessageType = MessageType.DIRECT
+    model_config = ConfigDict(from_attributes=True)
 
 
-class MessageCreate(MessageBase):
-    recipient_id: int
-    course_id: Optional[int] = None
-    attachments: Optional[List[MessageAttachmentCreate]] = None
-
-
-class MessageUpdate(BaseModel):
-    subject: Optional[str] = None
-    content: Optional[str] = None
-    status: Optional[MessageStatus] = None
-    is_read: Optional[bool] = None
+class MessageAttachmentResponse(MessageAttachmentInDB):
+    pass
 
 
 class MessageInDB(MessageBase):
     message_id: int
-    sender_id: int
-    recipient_id: int
-    status: MessageStatus
-    is_read: bool
-    read_at: Optional[datetime] = None
-    course_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    is_deleted: bool
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MessageResponse(MessageInDB):
-    attachments: Optional[List[MessageAttachmentInDB]] = None
+    attachments: List[MessageAttachmentResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)

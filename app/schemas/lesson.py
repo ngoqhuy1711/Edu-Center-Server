@@ -1,135 +1,64 @@
 from datetime import datetime
-from enum import Enum
-from typing import Optional, List
+from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-
-class LessonStatus(str, Enum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
-    HIDDEN = "hidden"
-    ARCHIVED = "archived"
+from app.models.lesson import LessonType, LessonStatus
 
 
-class LessonType(str, Enum):
-    TEXT = "text"
-    VIDEO = "video"
-    INTERACTIVE = "interactive"
-    QUIZ = "quiz"
-    ASSIGNMENT = "assignment"
+class TeachingMaterialBase(BaseModel):
+    title: str
+    description: Optional[str]
+    material_type: str
+    url: Optional[str]
+    file_path: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-# Base schemas
+class TeachingMaterial(TeachingMaterialBase):
+    material_id: int
+    course_id: int
+    lesson_id: Optional[int]
+    created_by: int
+    updated_by: Optional[int]
+    is_deleted: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class LessonBase(BaseModel):
     title: str
-    content: Optional[str] = None
-    summary: Optional[str] = None
-    lesson_type: LessonType = LessonType.TEXT
-    duration: Optional[int] = None
-    sequence_order: int = 0
-    is_required: bool = True
-
-
-class LessonResourceBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    resource_type: str
-    url: Optional[str] = None
-    file_path: Optional[str] = None
-
-
-class UserLessonProgressBase(BaseModel):
-    is_completed: bool = False
-    progress_percentage: float = 0.0
-    last_position: Optional[str] = None
-    time_spent: int = 0
-
-
-# Create schemas
-class LessonCreate(LessonBase):
-    course_id: int
-    status: LessonStatus = LessonStatus.DRAFT
-
-
-class LessonResourceCreate(LessonResourceBase):
-    lesson_id: int
-
-
-class UserLessonProgressCreate(UserLessonProgressBase):
-    user_id: int
-    lesson_id: int
-
-
-# Update schemas
-class LessonUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    summary: Optional[str] = None
-    lesson_type: Optional[LessonType] = None
-    status: Optional[LessonStatus] = None
-    duration: Optional[int] = None
-    sequence_order: Optional[int] = None
-    is_required: Optional[bool] = None
-
-
-class LessonResourceUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    resource_type: Optional[str] = None
-    url: Optional[str] = None
-    file_path: Optional[str] = None
-
-
-class UserLessonProgressUpdate(BaseModel):
-    is_completed: Optional[bool] = None
-    progress_percentage: Optional[float] = None
-    last_position: Optional[str] = None
-    time_spent: Optional[int] = None
-    completed_at: Optional[datetime] = None
-
-
-# Database schemas
-class LessonResourceInDB(LessonResourceBase):
-    resource_id: int
-    lesson_id: int
-    created_at: datetime
-
-    class Config:
-        orm_mode = True
-
-
-class UserLessonProgressInDB(UserLessonProgressBase):
-    progress_id: int
-    user_id: int
-    lesson_id: int
-    completed_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        orm_mode = True
-
-
-class LessonInDB(LessonBase):
-    lesson_id: int
-    course_id: int
+    description: Optional[str]
+    content: Optional[str]
+    lesson_order: Optional[int]
+    lesson_type: LessonType
     status: LessonStatus
+    estimated_time: Optional[int]
+    is_published: bool
+    published_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-# Response schemas
-class LessonResourceResponse(LessonResourceInDB):
-    pass
+class Lesson(LessonBase):
+    lesson_id: int
+    course_id: int
+    module_id: Optional[int]
+    created_by: int
+    updated_by: Optional[int]
+    is_deleted: bool
+    teaching_materials: List[TeachingMaterial] = []
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-class UserLessonProgressResponse(UserLessonProgressInDB):
-    pass
+class LessonList(BaseModel):
+    lessons: List[Lesson]
+    total: int
 
-
-class LessonResponse(LessonInDB):
-    resources: Optional[List[LessonResourceResponse]] = []
+    model_config = ConfigDict(from_attributes=True)

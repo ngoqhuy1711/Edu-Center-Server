@@ -3,8 +3,8 @@ from typing import Optional, Dict, Any, Type, Union
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.models.forum_post import ForumPost, ForumPostLike, ForumPostStatus, ForumPostType
-from app.schemas.forum_post import ForumPostCreate, ForumPostUpdate
+from app.models.forum import ForumPost, ForumPostLike, ForumPostStatus, ForumPostType
+from app.schemas.forum import ForumPostCreate, ForumPostUpdate
 
 
 def create_post(db: Session, post: ForumPostCreate, author_id: int) -> ForumPost:

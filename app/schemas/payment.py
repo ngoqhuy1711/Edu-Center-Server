@@ -1,40 +1,18 @@
 from datetime import datetime
-from enum import Enum
-from typing import Optional, List
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
-
-class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    REFUNDED = "refunded"
-    CANCELED = "canceled"
+from app.models.payment import PaymentMethodEnum, PaymentStatusEnum, PaymentTypeEnum
 
 
-class PaymentMethod(str, Enum):
-    CREDIT_CARD = "credit_card"
-    PAYPAL = "paypal"
-    BANK_TRANSFER = "bank_transfer"
-    CASH = "cash"
-    OTHER = "other"
-
-
-class PaymentType(str, Enum):
-    COURSE_PURCHASE = "course_purchase"
-    SUBSCRIPTION = "subscription"
-    MATERIAL = "material"
-    SERVICE = "service"
-    OTHER = "other"
-
-
-# Base Payment Schema
 class PaymentBase(BaseModel):
+    user_id: int
     amount: float
     currency: str = "USD"
-    payment_method: PaymentMethod
-    payment_type: PaymentType = PaymentType.OTHER
+    payment_method: PaymentMethodEnum
+    status: PaymentStatusEnum = PaymentStatusEnum.PENDING
+    payment_type: PaymentTypeEnum = PaymentTypeEnum.OTHER
     reference_id: Optional[int] = None
     transaction_reference: Optional[str] = None
     description: Optional[str] = None
@@ -46,23 +24,22 @@ class PaymentBase(BaseModel):
     billing_state: Optional[str] = None
     billing_country: Optional[str] = None
     billing_postal_code: Optional[str] = None
+    payment_date: Optional[datetime] = None
     invoice_number: Optional[str] = None
 
+    model_config = ConfigDict(from_attributes=True)
 
-# Schema for creating a new payment
+
 class PaymentCreate(PaymentBase):
-    user_id: int
-    status: PaymentStatus = PaymentStatus.PENDING
-    payment_date: Optional[datetime] = None
+    pass
 
 
-# Schema for updating an existing payment
 class PaymentUpdate(BaseModel):
     amount: Optional[float] = None
     currency: Optional[str] = None
-    payment_method: Optional[PaymentMethod] = None
-    status: Optional[PaymentStatus] = None
-    payment_type: Optional[PaymentType] = None
+    payment_method: Optional[PaymentMethodEnum] = None
+    status: Optional[PaymentStatusEnum] = None
+    payment_type: Optional[PaymentTypeEnum] = None
     reference_id: Optional[int] = None
     transaction_reference: Optional[str] = None
     description: Optional[str] = None
@@ -77,22 +54,19 @@ class PaymentUpdate(BaseModel):
     payment_date: Optional[datetime] = None
     invoice_number: Optional[str] = None
 
+    model_config = ConfigDict(from_attributes=True)
 
-# Schema for payment response
+
 class PaymentInDB(PaymentBase):
     payment_id: int
-    user_id: int
-    status: PaymentStatus
-    payment_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool
 
     model_config = ConfigDict(from_attributes=True)
 
 
-# Schema for paginated payment responses
-class PaymentList(BaseModel):
-    items: List[PaymentInDB]
-    total: int
-    page: int
-    size: int
+class PaymentResponse(PaymentInDB):
+    pass

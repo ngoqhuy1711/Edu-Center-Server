@@ -1,62 +1,48 @@
-from datetime import datetime
-from enum import Enum
+import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.staff_assignment import StaffAssignmentRole, StaffAssignmentStatus
 
 
-class StaffAssignmentStatus(str, Enum):
-    PENDING = "pending"
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    CANCELED = "canceled"
-
-
-class StaffAssignmentRole(str, Enum):
-    INSTRUCTOR = "instructor"
-    TEACHING_ASSISTANT = "teaching_assistant"
-    TUTOR = "tutor"
-    GUEST_LECTURER = "guest_lecturer"
-    ADMIN = "admin"
-    CONTENT_CREATOR = "content_creator"
-
-
-# Base schema with common attributes
 class StaffAssignmentBase(BaseModel):
     staff_id: int
     course_id: Optional[int] = None
     lesson_id: Optional[int] = None
-    role: StaffAssignmentRole
-    status: StaffAssignmentStatus = StaffAssignmentStatus.PENDING
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    role: StaffAssignmentRole = Field(...)
+    status: StaffAssignmentStatus = Field(default=StaffAssignmentStatus.pending)
+    start_date: Optional[datetime.datetime] = None
+    end_date: Optional[datetime.datetime] = None
     description: Optional[str] = None
     is_primary: bool = False
 
+    model_config = ConfigDict(from_attributes=True)
 
-# Schema for creating a staff assignment
+
 class StaffAssignmentCreate(StaffAssignmentBase):
     pass
 
 
-# Schema for updating a staff assignment
 class StaffAssignmentUpdate(BaseModel):
-    staff_id: Optional[int] = None
     course_id: Optional[int] = None
     lesson_id: Optional[int] = None
     role: Optional[StaffAssignmentRole] = None
     status: Optional[StaffAssignmentStatus] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    start_date: Optional[datetime.datetime] = None
+    end_date: Optional[datetime.datetime] = None
     description: Optional[str] = None
     is_primary: Optional[bool] = None
 
+    model_config = ConfigDict(from_attributes=True)
 
-# Schema for reading a staff assignment
-class StaffAssignmentInDB(StaffAssignmentBase):
+
+class StaffAssignmentRead(StaffAssignmentBase):
     assignment_id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

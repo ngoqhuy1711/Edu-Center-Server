@@ -1,66 +1,87 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from app.models.course import CourseStatus, CourseLevel
+from app.models.course import CourseStatus, MemberRole, MemberStatus
 
 
-# Base Course schema with common fields
 class CourseBase(BaseModel):
-    course_code: str = Field(..., max_length=20)
-    title: str = Field(..., max_length=200)
+    title: str
+    code: str
     description: Optional[str] = None
-    level: CourseLevel = CourseLevel.BEGINNER
-    credits: int = 0
-    max_students: int = 30
-    price: Optional[float] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    image_url: Optional[str] = None
-    syllabus: Optional[str] = None
-    prerequisites: Optional[str] = None
-    location: Optional[str] = Field(None, max_length=100)
-    status: CourseStatus = CourseStatus.UPCOMING
-    is_published: bool = False
-
-
-# Schema for creating a new course
-class CourseCreate(CourseBase):
-    teacher_id: int
-
-
-# Schema for updating an existing course
-class CourseUpdate(BaseModel):
-    course_code: Optional[str] = Field(None, max_length=20)
-    title: Optional[str] = Field(None, max_length=200)
-    description: Optional[str] = None
-    level: Optional[CourseLevel] = None
-    credits: Optional[int] = None
-    max_students: Optional[int] = None
-    price: Optional[float] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    image_url: Optional[str] = None
-    syllabus: Optional[str] = None
-    prerequisites: Optional[str] = None
-    location: Optional[str] = Field(None, max_length=100)
-    status: Optional[CourseStatus] = None
-    is_published: Optional[bool] = None
+    credit_hours: Optional[int] = None
+    status: Optional[CourseStatus] = CourseStatus.DRAFT
+    enrollment_limit: Optional[int] = None
     teacher_id: Optional[int] = None
+    department_id: Optional[int] = None
 
 
-# Schema for database course (includes all fields)
+class CourseCreate(CourseBase):
+    pass
+
+
+class CourseUpdate(BaseModel):
+    title: Optional[str] = None
+    code: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    credit_hours: Optional[int] = None
+    status: Optional[CourseStatus] = None
+    enrollment_limit: Optional[int] = None
+    teacher_id: Optional[int] = None
+    department_id: Optional[int] = None
+    is_deleted: Optional[bool] = None
+
+
 class CourseInDB(CourseBase):
     course_id: int
-    teacher_id: int
     created_at: datetime
     updated_at: datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool = False
 
-    class Config:
-        from_attributes = True  # For Pydantic v2+, use orm_mode=True for v1
+    model_config = {"from_attributes": True}
 
 
-# Schema for course response
 class CourseResponse(CourseInDB):
+    pass
+
+
+class CourseMemberBase(BaseModel):
+    course_id: int
+    user_id: int
+    role: MemberRole
+    status: MemberStatus
+    joined_at: Optional[datetime] = None
+
+
+class CourseMemberCreate(CourseMemberBase):
+    pass
+
+
+class CourseMemberUpdate(BaseModel):
+    course_id: Optional[int] = None
+    user_id: Optional[int] = None
+    role: Optional[MemberRole] = None
+    status: Optional[MemberStatus] = None
+    is_deleted: Optional[bool] = None
+
+
+class CourseMemberInDB(CourseMemberBase):
+    member_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class CourseMemberResponse(CourseMemberInDB):
     pass

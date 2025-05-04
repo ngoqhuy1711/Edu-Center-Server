@@ -13,7 +13,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT settings
 load_dotenv()
-SECRET_KEY = getenv("ME_MAY_BEO_VCC")
+SECRET_KEY = getenv("JWT_SECRET_KEY", "ME_MAY_BEO_VCC")
 if not SECRET_KEY:
     import secrets
 

@@ -1,53 +1,48 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.models.assignment import AssignmentStatus
 
 
-# Base Assignment schema with common fields
 class AssignmentBase(BaseModel):
-    title: str = Field(..., max_length=100)
+    title: str
     description: Optional[str] = None
-    instructions: str
-    due_date: datetime
-    max_score: float = Field(100.0, ge=0)
     attachment_url: Optional[str] = None
     status: AssignmentStatus = AssignmentStatus.DRAFT
+    is_active: bool = True
+    teacher_id: int
     course_id: int
+    lesson_id: Optional[int] = None
 
 
-# Schema for creating a new assignment
 class AssignmentCreate(AssignmentBase):
     pass
 
 
-# Schema for updating an existing assignment
 class AssignmentUpdate(BaseModel):
-    title: Optional[str] = Field(None, max_length=100)
+    title: Optional[str] = None
     description: Optional[str] = None
-    instructions: Optional[str] = None
-    due_date: Optional[datetime] = None
-    max_score: Optional[float] = Field(None, ge=0)
     attachment_url: Optional[str] = None
     status: Optional[AssignmentStatus] = None
     is_active: Optional[bool] = None
+    teacher_id: Optional[int] = None
     course_id: Optional[int] = None
+    lesson_id: Optional[int] = None
+    is_deleted: Optional[bool] = None
 
 
-# Schema for database assignment (includes all fields)
 class AssignmentInDB(AssignmentBase):
     assignment_id: int
-    teacher_id: int
-    is_active: bool
     created_at: datetime
     updated_at: datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool = False
 
-    class Config:
-        from_attributes = True  # For Pydantic v2+, use orm_mode=True for v1
+    model_config = ConfigDict(from_attributes=True)
 
 
-# Schema for assignment response
 class AssignmentResponse(AssignmentInDB):
     pass

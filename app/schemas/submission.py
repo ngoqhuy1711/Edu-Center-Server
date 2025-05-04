@@ -2,95 +2,86 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List
 
-from pydantic import BaseModel
-
-
-class SubmissionStatus(str, Enum):
-    DRAFT = "draft"
-    SUBMITTED = "submitted"
-    GRADING = "grading"
-    GRADED = "graded"
-    LATE = "late"
-    RETURNED = "returned"
-    RESUBMITTED = "resubmitted"
+from pydantic import BaseModel, ConfigDict
 
 
 class SubmissionType(str, Enum):
-    ASSIGNMENT = "assignment"
-    QUIZ = "quiz"
-    EXAM = "exam"
-    PROJECT = "project"
-    LAB = "lab"
+    file = 'file'
+    text = 'text'
+    url = 'url'
 
 
-# SubmissionAttachment schemas
-class SubmissionAttachmentBase(BaseModel):
+class SubmissionStatus(str, Enum):
+    submitted = 'submitted'
+    graded = 'graded'
+    late = 'late'
+    resubmitted = 'resubmitted'
+
+
+class SubmissionAttachment(BaseModel):
+    attachment_id: int
+    submission_id: int
     file_name: str
     file_path: str
     file_type: Optional[str] = None
     file_size: Optional[int] = None
-
-
-class SubmissionAttachmentCreate(SubmissionAttachmentBase):
-    submission_id: int
-
-
-class SubmissionAttachmentOut(SubmissionAttachmentBase):
-    attachment_id: int
-    submission_id: int
     created_at: datetime
+    updated_at: datetime
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-# Submission schemas
 class SubmissionBase(BaseModel):
+    user_id: int
+    course_id: int
+    lesson_id: Optional[int] = None
+    assignment_id: int
+    submission_type: SubmissionType
+    status: SubmissionStatus = SubmissionStatus.submitted
     title: str
     content: Optional[str] = None
-    submission_type: SubmissionType
-
-
-class SubmissionCreate(SubmissionBase):
-    user_id: int
-    course_id: int
-    assignment_id: int
-    lesson_id: Optional[int] = None
-    status: SubmissionStatus = SubmissionStatus.SUBMITTED
-
-
-class SubmissionUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    status: Optional[SubmissionStatus] = None
-    score: Optional[float] = None
-    max_score: Optional[float] = None
-    feedback: Optional[str] = None
-
-
-class SubmissionGrade(BaseModel):
-    score: float
-    max_score: float
-    feedback: Optional[str] = None
-    status: SubmissionStatus = SubmissionStatus.GRADED
-
-
-class SubmissionOut(SubmissionBase):
-    submission_id: int
-    user_id: int
-    course_id: int
-    lesson_id: Optional[int] = None
-    assignment_id: int
-    status: SubmissionStatus
     score: Optional[float] = None
     max_score: Optional[float] = None
     graded_by: Optional[int] = None
     feedback: Optional[str] = None
-    submitted_at: datetime
-    graded_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubmissionCreate(SubmissionBase):
+    pass
+
+
+class SubmissionUpdate(BaseModel):
+    user_id: Optional[int] = None
+    course_id: Optional[int] = None
+    lesson_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    submission_type: Optional[SubmissionType] = None
+    status: Optional[SubmissionStatus] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
+    score: Optional[float] = None
+    max_score: Optional[float] = None
+    graded_by: Optional[int] = None
+    feedback: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    is_deleted: Optional[bool] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubmissionInDB(SubmissionBase):
+    submission_id: int
     created_at: datetime
     updated_at: datetime
-    attachments: List[SubmissionAttachmentOut] = []
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    is_deleted: bool
+    attachments: List[SubmissionAttachment] = []
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
