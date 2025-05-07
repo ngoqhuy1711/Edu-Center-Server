@@ -16,8 +16,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 router = APIRouter()
 
 
-# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto") # Remove passlib context
-
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifies a plain password against a hashed password."""
