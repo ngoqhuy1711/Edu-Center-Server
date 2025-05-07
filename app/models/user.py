@@ -1,116 +1,107 @@
-import enum
+from datetime import datetime, UTC
+from typing import Optional, Dict
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import ENUM
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlmodel import SQLModel, Field, func, PrimaryKeyConstraint, Relationship
 
-from app.core.database import Base
-
-
-class UserRoleType(enum.Enum):
-    admin = 'admin'
-    instructor = 'instructor'
-    student = 'student'
+from app.models.role import Role
 
 
-class LessonProgressStatus(enum.Enum):
-    not_started = 'not_started'
-    in_progress = 'in_progress'
-    completed = 'completed'
-
-
-class User(Base):
-    __tablename__ = 'users'
-    user_id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), nullable=False, unique=True)
-    email = Column(String(255), nullable=False, unique=True)
-    hashed_password = Column(String(255), nullable=False)
-    is_active = Column(Boolean, default=True)
-    is_deleted = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-
-    roles = relationship('UserRole', back_populates='user', cascade='all, delete-orphan')
-    profile = relationship('UserProfile', back_populates='user', uselist=False, cascade='all, delete-orphan')
-    lesson_progress = relationship('UserLessonProgress', back_populates='user', cascade='all, delete-orphan')
-    creator = relationship('User', remote_side=[user_id], foreign_keys=[created_by])  # type: ignore
-    updater = relationship('User', remote_side=[user_id], foreign_keys=[updated_by])  # type: ignore
-
-    __table_args__ = (
-        Index('idx_users_email', 'email'),
-        Index('idx_users_is_deleted', 'is_deleted'),
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+    user_id: int = Field(default=None, primary_key=True)
+    username: str = Field(max_length=50, nullable=False)
+    email: str = Field(max_length=100, nullable=False)
+    password_hash: str = Field(max_length=255, nullable=False)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
     )
 
+    profiles: list["UserProfile"] = Relationship(back_populates="user",
+                                                 sa_relationship_kwargs={"foreign_keys": "[UserProfile.user_id]"})
+    roles: list["UserRole"] = Relationship(back_populates="user",
+                                           sa_relationship_kwargs={"foreign_keys": "[UserRole.user_id]"})
 
-class UserRole(Base):
-    __tablename__ = 'user_roles'
-    user_role_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    role = Column(ENUM(UserRoleType, name='user_role_type'), nullable=False)
-    is_deleted = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
+    def __repr__(self) -> str:
+        return f"User(user_id={self.user_id}, username={self.username}, email={self.email})"
 
-    user = relationship('User', back_populates='roles')
-    creator = relationship('User', foreign_keys=[created_by])  # type: ignore
-    updater = relationship('User', foreign_keys=[updated_by])  # type: ignore
 
+class UserRole(SQLModel, table=True):
+    __tablename__ = "user_roles"
+    user_id: int = Field(foreign_key="users.user_id", primary_key=True)
+    role_id: int = Field(foreign_key="roles.role_id", primary_key=True)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
     __table_args__ = (
-        Index('idx_user_roles_user_id', 'user_id'),
-        Index('idx_user_roles_is_deleted', 'is_deleted'),
+        PrimaryKeyConstraint("user_id", "role_id"),
     )
 
+    user: "User" = Relationship(back_populates="roles",
+                                sa_relationship_kwargs={"foreign_keys": "[UserRole.user_id]"})
+    role: "Role" = Relationship(back_populates="users",
+                                sa_relationship_kwargs={"foreign_keys": "[UserRole.role_id]"})
 
-class UserProfile(Base):
-    __tablename__ = 'user_profiles'
-    user_profile_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    first_name = Column(String(50), nullable=True)
-    last_name = Column(String(50), nullable=True)
-    bio = Column(Text, nullable=True)
-    avatar_url = Column(String(512), nullable=True)
-    is_deleted = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
+    def __repr__(self) -> str:
+        return f"UserRole(user_id={self.user_id}, role_id={self.role_id})"
 
-    user = relationship('User', back_populates='profile')
-    creator = relationship('User', foreign_keys=[created_by])  # type: ignore
-    updater = relationship('User', foreign_keys=[updated_by])  # type: ignore
 
-    __table_args__ = (
-        Index('idx_user_profiles_user_id', 'user_id'),
-        Index('idx_user_profiles_is_deleted', 'is_deleted'),
+class UserProfile(SQLModel, table=True):
+    __tablename__ = "user_profiles"
+    user_profile_id: int = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.user_id", primary_key=True)
+    full_name: str = Field(max_length=100, nullable=False)
+    profile_picture: str = Field(max_length=255, nullable=True)
+    date_of_birth: datetime = Field(nullable=True)
+    phone_number: str = Field(max_length=20, nullable=True)
+    address: str = Field(max_length=255, nullable=True)
+    bio: str = Field(max_length=500, nullable=True)
+    gender: str = Field(max_length=10, nullable=True)
+    social_links: Optional[Dict] = Field(default=None, sa_column=Column(JSONB))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
     )
 
+    user: "User" = Relationship(back_populates="profiles",
+                                sa_relationship_kwargs={"foreign_keys": "[UserProfile.user_id]"})
 
-class UserLessonProgress(Base):
-    __tablename__ = 'user_lesson_progress'
-    user_lesson_progress_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    lesson_id = Column(Integer, ForeignKey('lessons.lesson_id', ondelete='CASCADE'), nullable=False)
-    status = Column(ENUM(LessonProgressStatus, name='lesson_progress_status'), nullable=False,
-                    default=LessonProgressStatus.not_started)
-    last_accessed_at = Column(DateTime(timezone=True), nullable=True)
-    is_deleted = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-
-    user = relationship('User', back_populates='lesson_progress')
-    lesson = relationship('Lesson')
-    creator = relationship('User', foreign_keys=[created_by])  # type: ignore
-    updater = relationship('User', foreign_keys=[updated_by])  # type: ignore
-
-    __table_args__ = (
-        Index('idx_user_lesson_progress_user_id', 'user_id'),
-        Index('idx_user_lesson_progress_lesson_id', 'lesson_id'),
-        Index('idx_user_lesson_progress_is_deleted', 'is_deleted'),
-    )
+    def __repr__(self) -> str:
+        return f"UserProfile(user_id={self.user_id}, full_name={self.full_name})"

@@ -1,107 +1,135 @@
 import enum
 from datetime import datetime, UTC
+from typing import Optional
 
-from sqlalchemy import (
-    Column, Integer, String, Float, Text, Boolean,
-    DateTime, ForeignKey, Enum
-)
-from sqlalchemy.orm import relationship
+from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.core.database import Base
+from app.models.course import Course
+from app.models.user import User
 
 
-class ExamType(enum.Enum):
+class ExamType(str, enum.Enum):
     QUIZ = "quiz"
     MIDTERM = "midterm"
     FINAL = "final"
+    PLACEMENT = "placement"
     PRACTICE = "practice"
 
 
-class ExamStatus(enum.Enum):
+class ExamStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ACTIVE = "active"
     CLOSED = "closed"
+    ARCHIVED = "archived"
 
 
-class ExamSubmissionStatus(enum.Enum):
-    STARTED = "started"
+class ExamSubmissionStatus(str, enum.Enum):
+    DRAFT = "draft"
     SUBMITTED = "submitted"
     GRADED = "graded"
-    FAILED = "failed"
-    PASSED = "passed"
+    LATE = "late"
 
 
-class Exam(Base):
-    __tablename__ = 'exams'
+class Exam(SQLModel, table=True):
+    __tablename__ = "exams"
+    exam_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(default=None)
+    instructions: Optional[str] = Field(default=None)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    teacher_id: int = Field(foreign_key="users.user_id", nullable=False)
+    exam_type: ExamType = Field(default=ExamType.QUIZ, sa_column_kwargs={"nullable": False})
+    status: ExamStatus = Field(default=ExamStatus.DRAFT, sa_column_kwargs={"nullable": False})
+    duration: Optional[int] = Field(default=None, sa_column_kwargs={"nullable": True})
+    max_score: float = Field(default=100.0, sa_column_kwargs={"nullable": False})
+    passing_score: Optional[float] = Field(default=None, sa_column_kwargs={"nullable": True})
+    start_date: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "nullable": False
+        }
+    )
+    end_date: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "nullable": False
+        }
+    )
+    questions: Optional[str] = Field(default=None)
+    shuffle_questions: bool = Field(default=False)
+    allow_multiple_attempts: bool = Field(default=False)
+    max_attempts: int = Field(default=1)
+    show_answers: bool = Field(default=True)
+    show_score: bool = Field(default=True)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
 
-    # Primary keys and foreign keys
-    exam_id = Column(Integer, primary_key=True)
-    course_id = Column(Integer, ForeignKey('courses.course_id'), nullable=False)
-    lesson_id = Column(Integer, ForeignKey('lessons.lesson_id'))
+    course: "Course" = Relationship(back_populates="exams",
+                                              sa_relationship_kwargs={"foreign_keys": "[Exam.course_id]"})
+    teacher: "User" = Relationship(back_populates="exams",
+                                             sa_relationship_kwargs={"foreign_keys": "[Exam.teacher_id]"})
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Exam.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Exam.updated_by]"})
 
-    # Basic exam info
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    instructions = Column(Text)
-    exam_type = Column(Enum(ExamType), default=ExamType.QUIZ)
-    status = Column(Enum(ExamStatus), default=ExamStatus.DRAFT)
-
-    # Timing and attempts
-    start_time = Column(DateTime(timezone=True))
-    end_time = Column(DateTime(timezone=True))
-    duration_minutes = Column(Integer)
-    max_attempts = Column(Integer, default=1)
-
-    # Exam settings
-    passing_score = Column(Float)
-    is_timed = Column(Boolean, default=True)
-    randomize_questions = Column(Boolean, default=False)
-    show_result_after = Column(Boolean, default=True)
-
-    # Audit fields
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC))
-    created_by = Column(Integer, ForeignKey('users.user_id'))
-    updated_by = Column(Integer, ForeignKey('users.user_id'))
-    is_deleted = Column(Boolean, default=False)
-
-    # Relationships
-    course = relationship("Course", back_populates="exams")
-    lesson = relationship("Lesson", back_populates="exams")
-    submissions = relationship("ExamSubmission", back_populates="exam")
+    def __repr__(self) -> str:
+        return f"Exam(exam_id={self.exam_id}, title={self.title}, course_id={self.course_id}, teacher_id={self.teacher_id})"
 
 
-class ExamSubmission(Base):
-    __tablename__ = 'exam_submissions'
+class ExamSubmission(SQLModel, table=True):
+    __tablename__ = "exam_submissions"
+    exam_submission_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    student_id: int = Field(foreign_key="users.user_id", nullable=False)
+    exam_id: int = Field(foreign_key="exams.exam_id", nullable=False)
+    answers: Optional[str] = Field(default=None)
+    submission_date: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    status: ExamSubmissionStatus = Field(default=ExamSubmissionStatus.DRAFT, sa_column_kwargs={"nullable": False})
+    score: Optional[float] = Field(default=None, sa_column_kwargs={"nullable": True})
+    feedback: Optional[str] = Field(default=None)
+    is_completed: bool = Field(default=False)
+    time_spent: Optional[int] = Field(default=None, sa_column_kwargs={"nullable": True})
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
 
-    # Primary keys and foreign keys
-    submission_id = Column(Integer, primary_key=True)
-    exam_id = Column(Integer, ForeignKey('exams.exam_id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
+    student: "User" = Relationship(back_populates="exam_submissions",
+                                             sa_relationship_kwargs={"foreign_keys": "[ExamSubmission.student_id]"})
+    exam: "Exam" = Relationship(back_populates="exam_submissions",
+                                          sa_relationship_kwargs={"foreign_keys": "[ExamSubmission.exam_id]"})
 
-    # Submission status and timing
-    status = Column(Enum(ExamSubmissionStatus), default=ExamSubmissionStatus.STARTED)
-    start_time = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    submit_time = Column(DateTime(timezone=True))
-    time_spent_minutes = Column(Integer)
-    attempt_number = Column(Integer, default=1)
-
-    # Grading info
-    score = Column(Float)
-    max_score = Column(Float)
-    feedback = Column(Text)
-    graded_by = Column(Integer, ForeignKey('users.user_id'))
-    graded_at = Column(DateTime(timezone=True))
-
-    # Audit fields
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC))
-    created_by = Column(Integer, ForeignKey('users.user_id'))
-    updated_by = Column(Integer, ForeignKey('users.user_id'))
-    is_deleted = Column(Boolean, default=False)
-
-    # Relationships
-    exam = relationship("Exam", back_populates="submissions")
-    user = relationship("User", foreign_keys=[user_id])  # type: ignore
-    grader = relationship("User", foreign_keys=[graded_by])  # type: ignore
+    def __repr__(self) -> str:
+        return f"ExamSubmission(exam_submission_id={self.exam_submission_id}, student_id={self.student_id}, exam_id={self.exam_id})"

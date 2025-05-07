@@ -1,47 +1,62 @@
 import enum
+from datetime import datetime, UTC
+from typing import Optional, List
 
-from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, Enum, ForeignKey, Float, func
-)
-from sqlalchemy.orm import relationship
+from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.core.database import Base
+from app.models.lesson import Lesson
+from app.models.submission import Submission
+from app.models.user import User
 
 
-class AssignmentStatus(enum.Enum):
+class AssignmentStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     CLOSED = "closed"
 
 
-class Assignment(Base):
+class Assignment(SQLModel, table=True):
     __tablename__ = "assignments"
+    assignment_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(default=None)
+    instructions: str = Field(...)
+    due_date: datetime = Field(..., sa_column_kwargs={"nullable": False})
+    max_score: float = Field(default=100.0, sa_column_kwargs={"nullable": False})
+    attachment_url: Optional[str] = Field(default=None, max_length=255)
+    status: AssignmentStatus = Field(default=AssignmentStatus.DRAFT, sa_column_kwargs={"nullable": False})
+    is_active: bool = Field(default=True, sa_column_kwargs={"nullable": False})
 
-    assignment_id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    instructions = Column(Text, nullable=False)
-    due_date = Column(DateTime(timezone=True), nullable=False)
-    max_score = Column(Float, default=100.0, nullable=False)
-    attachment_url = Column(String(255))
-    status = Column(Enum(AssignmentStatus), default=AssignmentStatus.DRAFT, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
-    teacher_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    course_id = Column(Integer, ForeignKey("courses.course_id", ondelete="CASCADE"), nullable=False)
-    lesson_id = Column(Integer, ForeignKey("lessons.lesson_id", ondelete="SET NULL"))
-    created_at = Column(DateTime(timezone=True), default=func.current_timestamp(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp(),
-                        nullable=False)
-    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    is_deleted = Column(Boolean, default=False)
+    teacher_id: int = Field(foreign_key="users.user_id", nullable=False)
+    lesson_id: int = Field(foreign_key="lessons.lesson_id", nullable=True)
 
-    teacher = relationship("User", foreign_keys=[teacher_id])  # type: ignore
-    course = relationship("Course", back_populates="assignments")
-    lesson = relationship("Lesson")
-    submissions = relationship("Submission", back_populates="assignment", cascade="all, delete-orphan")
-    created_by_user = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updated_by_user = relationship("User", foreign_keys=[updated_by])  # type: ignore
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
 
-    def __repr__(self):
+    teacher: "User" = Relationship(back_populates="assignments",
+                                   sa_relationship_kwargs={"foreign_keys": "[Assignment.teacher_id]"})
+    lesson: "Lesson" = Relationship(back_populates="assignments",
+                                    sa_relationship_kwargs={"foreign_keys": "[Assignment.lesson_id]"})
+    submissions: List["Submission"] = Relationship(back_populates="assignment",
+                                                   sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Assignment.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Assignment.updated_by]"})
+
+    def __repr__(self) -> str:
         return f"<Assignment {self.title} (ID: {self.assignment_id})>"

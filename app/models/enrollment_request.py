@@ -1,42 +1,72 @@
-import enum
+from datetime import datetime
+from enum import Enum as PyEnum
+from typing import Optional
 
-from sqlalchemy import Column, Integer, DateTime, Boolean, ForeignKey, Enum, Text
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlmodel import SQLModel, Field, func, Relationship
 
-from app.core.database import Base
+from app.models.course import Course
+from app.models.user import User
 
 
-class EnrollmentRequestStatus(enum.Enum):
+class EnrollmentRequestStatus(PyEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
-class EnrollmentRequest(Base):
+class EnrollmentRequest(SQLModel, table=True):
     __tablename__ = "enrollment_requests"
+    request_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    user_id: int = Field(foreign_key="users.user_id", nullable=False)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    assigned_staff_id: Optional[int] = Field(foreign_key="users.user_id")
+    status: EnrollmentRequestStatus = Field(default=EnrollmentRequestStatus.PENDING)
+    request_date: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    response_date: Optional[datetime] = Field(
+        default=None,
+        sa_column_kwargs={
+            "nullable": True
+        }
+    )
+    request_notes: Optional[str] = Field(default=None)
+    rejection_notes: Optional[str] = Field(default=None)
+    additional_requirements: Optional[str] = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    __table_args__ = (
+        {
+            "comment": "Enrollment requests for courses by users",
+            "extend_existing": True,
+        },
+    )
 
-    request_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    course_id = Column(Integer, ForeignKey("courses.course_id", ondelete="CASCADE"), nullable=False)
-    status = Column(Enum(EnrollmentRequestStatus), default=EnrollmentRequestStatus.PENDING, nullable=False)
-    message = Column(Text)
-    response_message = Column(Text)
-    responded_at = Column(DateTime(timezone=True))
-    responded_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    created_at = Column(DateTime(timezone=True), default=func.current_timestamp(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp(),
-                        nullable=False)
-    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    is_deleted = Column(Boolean, default=False)
+    user: "User" = Relationship(back_populates="enrollment_requests",
+                                sa_relationship_kwargs={"foreign_keys": "[EnrollmentRequest.user_id]"})
+    course: "Course" = Relationship(back_populates="enrollment_requests",
+                                    sa_relationship_kwargs={
+                                        "foreign_keys": "[EnrollmentRequest.course_id]"})
+    assigned_staff: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[EnrollmentRequest.assigned_staff_id]"}
+    )
 
-    # Relationships
-    user = relationship("User", foreign_keys="[user_id]")
-    course = relationship("Course")
-    responder = relationship("User", foreign_keys=[responded_by])  # type: ignore
-    created_by_user = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updated_by_user = relationship("User", foreign_keys=[updated_by])  # type: ignore
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<EnrollmentRequest by User {self.user_id} for Course {self.course_id} (Status: {self.status.value})>"

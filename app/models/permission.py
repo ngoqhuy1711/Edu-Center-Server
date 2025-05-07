@@ -1,17 +1,31 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from datetime import datetime
+from typing import Optional
 
-from app.core.database import Base
+from sqlmodel import SQLModel, Field, func
 
 
-class Permission(Base):
-    __tablename__ = 'permissions'
+class Permission(SQLModel, table=True):
+    __tablename__ = "permissions"
+    permission_id: Optional[int] = Field(default=None, foreign_key="users.permission_id")
+    permission_name: str = Field(max_length=100, nullable=False)
+    permission_code: str = Field(max_length=50, nullable=False)
+    module: Optional[str] = Field(max_length=50, nullable=True)
+    description: Optional[str] = Field(max_length=255, nullable=True)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
 
-    permission_id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100), nullable=False, unique=True)
-    description = Column(String(255))
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False)
-    updated_at = Column(DateTime(timezone=True), nullable=False)
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    is_deleted = Column(Boolean, default=False)
+    def __repr__(self) -> str:
+        return f"Permission(permission_id={self.permission_id}, permission_name={self.permission_name}, permission_code={self.permission_code})"

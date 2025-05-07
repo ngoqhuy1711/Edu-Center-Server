@@ -1,75 +1,151 @@
-from datetime import datetime, UTC
 from enum import Enum
+from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship, func
+from datetime import datetime, UTC
 
-from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum as SQLAlchemyEnum
-)
-from sqlalchemy.orm import relationship
-
-from app.core.database import Base
-
-
-class LessonType(str, Enum):
-    LECTURE = "lecture"
-    LAB = "lab"
-    ASSIGNMENT = "assignment"
-    QUIZ = "quiz"
-    EXAM = "exam"
-    OTHER = "other"
+from app.models.course import Course
+from app.models.user import User
 
 
 class LessonStatus(str, Enum):
     DRAFT = "draft"
-    REVIEW = "review"
     PUBLISHED = "published"
+    HIDDEN = "hidden"
     ARCHIVED = "archived"
 
-
-class Lesson(Base):
-    __tablename__ = 'lessons'
-
-    lesson_id = Column(Integer, primary_key=True)
-    course_id = Column(Integer, ForeignKey('courses.course_id'), nullable=False)
-    module_id = Column(Integer, ForeignKey('modules.module_id'))
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    content = Column(Text)
-    lesson_order = Column(Integer)
-    lesson_type = Column(SQLAlchemyEnum(LessonType), nullable=False)
-    status = Column(SQLAlchemyEnum(LessonStatus), default=LessonStatus.DRAFT, nullable=False)
-    estimated_time = Column(Integer)
-    is_published = Column(Boolean, default=False)
-    published_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC))
-    created_by = Column(Integer, ForeignKey('users.user_id'))
-    updated_by = Column(Integer, ForeignKey('users.user_id'))
-    is_deleted = Column(Boolean, default=False)
-
-    course = relationship("Course")
-    module = relationship("Module")
-    assignments = relationship("Assignment", back_populates="lesson")
-    teaching_materials = relationship("TeachingMaterial", back_populates="lesson")
-    submissions = relationship("Submission", back_populates="lesson")
-    staff_assignments = relationship("StaffAssignment", back_populates="lesson")
+class LessonType(str, Enum):
+    TEXT = "text"
+    VIDEO = "video"
+    INTERACTIVE = "interactive"
+    QUIZ = "quiz"
+    ASSIGNMENT = "assignment"
 
 
-class TeachingMaterial(Base):
-    __tablename__ = 'teaching_materials'
+class Lesson(SQLModel, table=True):
+    __tablename__ = "lessons"
+    lesson_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    title: str = Field(..., max_length=255)
+    content: Optional[str] = Field(default=None)
+    summary: Optional[str] = Field(default=None)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    lesson_type: LessonType = Field(default=LessonType.TEXT, sa_column_kwargs={"nullable": False})
+    status: LessonStatus = Field(default=LessonStatus.DRAFT, sa_column_kwargs={"nullable": False})
+    duration: Optional[int] = Field(default=None, sa_column_kwargs={"nullable": True})
+    sequence_order: int = Field(default=0)
+    is_required: bool = Field(default=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
+    meeting_link: Optional[str] = Field(default=None, max_length=255)
+    start_time: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "nullable": False
+        }
+    )
+    end_time: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "nullable": False
+        }
+    )
 
-    material_id = Column(Integer, primary_key=True)
-    course_id = Column(Integer, ForeignKey('courses.course_id'), nullable=False)
-    lesson_id = Column(Integer, ForeignKey('lessons.lesson_id'))
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    material_type = Column(String(50), nullable=False)
-    url = Column(String(512))
-    file_path = Column(String(512))
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC))
-    created_by = Column(Integer, ForeignKey('users.user_id'))
-    updated_by = Column(Integer, ForeignKey('users.user_id'))
-    is_deleted = Column(Boolean, default=False)
+    course: "Course" = Relationship(back_populates="lessons",
+                                     sa_relationship_kwargs={"foreign_keys": "[Lesson.course_id]"})
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Lesson.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Lesson.updated_by]"})
 
-    course = relationship("Course")
-    lesson = relationship("Lesson", back_populates="teaching_materials")
+    def __repr__(self) -> str:
+        return f"Lesson(lesson_id={self.lesson_id}, title={self.title}, course_id={self.course_id})"
+
+
+class LessonResource(SQLModel, table=True):
+    __tablename__ = "lesson_resources"
+    resource_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    lesson_id: int = Field(foreign_key="lessons.lesson_id", nullable=False)
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(default=None)
+    resource_type: str = Field(..., max_length=50)
+    url: str = Field(..., max_length=512)
+    file_path: str = Field(..., max_length=512)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
+
+    lesson: "Lesson" = Relationship(back_populates="resources",
+                                        sa_relationship_kwargs={"foreign_keys": "[LessonResource.lesson_id]"})
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[LessonResource.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[LessonResource.updated_by]"})
+
+    def __repr__(self) -> str:
+        return f"LessonResource(resource_id={self.resource_id}, title={self.title}, lesson_id={self.lesson_id})"
+
+class UserLessonProgress(SQLModel, table=True):
+    __tablename__ = "user_lesson_progress"
+    progress_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    user_id: int = Field(foreign_key="users.user_id", nullable=False)
+    lesson_id: int = Field(foreign_key="lessons.lesson_id", nullable=False)
+    is_completed: bool = Field(default=False)
+    progress_percentage: float = Field(default=0.0, ge=0.0, le=100.0)
+    last_position: Optional[str] = Field(default=None)
+    time_spent: int = Field(default=0)
+    completed_at: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+
+    user: "User" = Relationship(back_populates="lesson_progress",
+                            sa_relationship_kwargs={"foreign_keys": "[UserLessonProgress.user_id]"})
+    lesson: "Lesson" = Relationship(back_populates="user_progress",
+                                     sa_relationship_kwargs={"foreign_keys": "[UserLessonProgress.lesson_id]"})
+
+    def __repr__(self) -> str:
+        return f"UserLessonProgress(progress_id={self.progress_id}, user_id={self.user_id}, lesson_id={self.lesson_id})"

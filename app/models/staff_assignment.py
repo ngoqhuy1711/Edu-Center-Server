@@ -1,48 +1,76 @@
-import enum
+from datetime import datetime
+from enum import Enum
+from typing import Optional
 
-from sqlalchemy import Column, Integer, ForeignKey, Enum, DateTime, Boolean, Text, CheckConstraint, func
-from sqlalchemy.orm import relationship
-
-from app.core.database import Base
-
-
-class StaffAssignmentRole(enum.Enum):
-    instructor = "instructor"
-    assistant = "assistant"
-    pending = "pending"
+from sqlmodel import SQLModel, Field, Relationship, func
 
 
-class StaffAssignmentStatus(enum.Enum):
-    pending = "pending"
-    active = "active"
-    inactive = "inactive"
+class StaffAssignmentRole(str, Enum):
+    INSTRUCTOR = "instructor"
+    TEACHER_ASSISTANT = "teacher_assistant"
+    GRADER = "grader"
+    MENTOR = "mentor"
 
 
-class StaffAssignment(Base):
+class StaffAssignmentStatus(str, Enum):
+    PENDING = "pending"
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class StaffAssignment(SQLModel, table=True):
     __tablename__ = "staff_assignments"
-    __table_args__ = (
-        CheckConstraint("start_date <= end_date", name="chk_staff_assignment_dates"),
+    assignment_id: Optional[int] = Field(default=None, primary_key=True)
+    staff_id: int = Field(foreign_key="users.user_id", nullable=False)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    lesson_id: Optional[int] = Field(foreign_key="lessons.lesson_id", nullable=True)
+    role: StaffAssignmentRole = Field()
+    status: StaffAssignmentStatus = Field(default=StaffAssignmentStatus.PENDING)
+    start_date: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
     )
+    end_date: Optional[datetime] = Field(
+        default=None,
+        sa_column_kwargs={
+            "nullable": True
+        }
+    )
+    description: Optional[str] = Field(default=None)
+    is_primary: bool = Field(default=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
 
-    assignment_id = Column(Integer, primary_key=True)
-    staff_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    course_id = Column(Integer, ForeignKey("courses.course_id", ondelete="SET NULL"))
-    lesson_id = Column(Integer, ForeignKey("lessons.lesson_id", ondelete="SET NULL"))
-    role = Column(Enum(StaffAssignmentRole, name="staff_assignment_role"), nullable=False)
-    status = Column(Enum(StaffAssignmentStatus, name="staff_assignment_status"), nullable=False,
-                    default=StaffAssignmentStatus.pending)
-    start_date = Column(DateTime(timezone=True))
-    end_date = Column(DateTime(timezone=True))
-    description = Column(Text)
-    is_primary = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    is_deleted = Column(Boolean, nullable=False, default=False)
+    staff: "User" = Relationship(back_populates="staff_assignments",
+                                 sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.staff_id]"})
+    course: "Course" = Relationship(back_populates="staff_assignments",
+                                    sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.course_id]"})
+    lesson: Optional["Lesson"] = Relationship(back_populates="staff_assignments",
+                                              sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.lesson_id]"})
+    created_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.updated_by]"})
 
-    staff = relationship("User", foreign_keys=[staff_id])  # type: ignore
-    creator = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updater = relationship("User", foreign_keys=[updated_by])  # type: ignore
-    course = relationship("Course", foreign_keys=[course_id])  # type: ignore
-    lesson = relationship("Lesson", foreign_keys=[lesson_id])  # type: ignore
+    def __repr__(self) -> str:
+        return f"StaffAssignment(assignment_id={self.assignment_id}, staff_id={self.staff_id}, course_id={self.course_id}, lesson_id={self.lesson_id}, role={self.role})"

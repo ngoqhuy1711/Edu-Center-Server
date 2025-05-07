@@ -1,145 +1,130 @@
-from datetime import datetime, UTC
-from typing import Optional, Dict, Any
+from typing import Type
 
-from sqlalchemy import desc, asc
+from fastapi import HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models.exam import Exam, ExamStatus, ExamType
-from app.schemas.exam import ExamCreate, ExamUpdate
+from app.models.exam import Exam, ExamSubmission
+from app.schemas.exam import (
+    ExamCreate,
+    ExamUpdate,
+    ExamSubmissionCreate,
+    ExamSubmissionUpdate,
+)
 
 
-def create_exam(db: Session, exam: ExamCreate) -> Exam:
-    """
-    Create a new exam in the database.
-    """
-    db_exam = Exam(
-        title=exam.title,
-        description=exam.description,
-        instructions=exam.instructions,
-        course_id=exam.course_id,
-        teacher_id=exam.teacher_id,
-        exam_type=exam.exam_type,
-        status=exam.status,
-        duration=exam.duration,
-        max_score=exam.max_score,
-        passing_score=exam.passing_score,
-        start_date=exam.start_date,
-        end_date=exam.end_date,
-        questions=exam.questions,
-        shuffle_questions=exam.shuffle_questions,
-        allow_multiple_attempts=exam.allow_multiple_attempts,
-        max_attempts=exam.max_attempts,
-        show_answers=exam.show_answers,
-        show_score=exam.show_score,
+def get_exams(db: Session, skip: int = 0, limit: int = 100) -> list[Type[Exam]]:
+    return (
+        db.query(Exam)
+        .filter(Exam.is_deleted.is_(False))
+        .offset(skip)
+        .limit(limit)
+        .all()
     )
-    db.add(db_exam)
-    db.commit()
-    db.refresh(db_exam)
-    return db_exam
 
 
-def get_exam(db: Session, exam_id: int) -> Optional[Exam]:
-    """
-    Get a single exam by ID.
-    """
-    return db.query(Exam).filter(Exam.exam_id == exam_id).first()
+def get_exam(db: Session, exam_id: int) -> Type[Exam]:
+    exam = (
+        db.query(Exam)
+        .filter(Exam.exam_id == exam_id, Exam.is_deleted.is_(False))
+        .first()
+    )
+    if not exam:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam not found")
+    return exam
 
 
-def get_exams(
-        db: Session,
-        skip: int = 0,
-        limit: int = 100,
-        course_id: Optional[int] = None,
-        teacher_id: Optional[int] = None,
-        status: Optional[ExamStatus] = None,
-        exam_type: Optional[ExamType] = None,
-        sort_by: str = "created_at",
-        sort_order: str = "desc"
-) -> Dict[str, Any]:
-    """
-    Get multiple exams with filtering and pagination.
-    Returns dict with items (list of exams) and total (count of all matching exams).
-    """
-    query = db.query(Exam)
-
-    # Apply filters
-    if course_id is not None:
-        query = query.filter(Exam.course_id == course_id)
-    if teacher_id is not None:
-        query = query.filter(Exam.teacher_id == teacher_id)
-    if status is not None:
-        query = query.filter(Exam.status == status)
-    if exam_type is not None:
-        query = query.filter(Exam.exam_type == exam_type)
-
-    # Get total count before pagination
-    total = query.count()
-
-    # Apply sorting
-    if hasattr(Exam, sort_by):
-        order_column = getattr(Exam, sort_by)
-        if sort_order.lower() == "desc":
-            query = query.order_by(desc(order_column))
-        else:
-            query = query.order_by(asc(order_column))
-
-    # Apply pagination
-    exams = query.offset(skip).limit(limit).all()
-
-    return {
-        "items": exams,
-        "total": total
-    }
+def create_exam(db: Session, data: ExamCreate, user_id: int) -> Exam:
+    exam = Exam(**data.model_dump(), created_by=user_id, updated_by=user_id)
+    try:
+        db.add(exam)
+        db.commit()
+        db.refresh(exam)
+        return exam
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-def update_exam(db: Session, exam_id: int, exam_update: ExamUpdate) -> Optional[Exam]:
-    """
-    Update an existing exam.
-    """
-    db_exam = get_exam(db, exam_id)
-    if not db_exam:
-        return None
-
-    update_data = exam_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_exam, key, value)
-
-    db_exam.updated_at = datetime.now(tz=UTC)
-    db.commit()
-    db.refresh(db_exam)
-    return db_exam
+def update_exam(db: Session, exam_id: int, data: ExamUpdate, user_id: int) -> Type[Exam]:
+    exam = get_exam(db, exam_id)
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(exam, field, value)
+    exam.updated_by = user_id
+    try:
+        db.commit()
+        db.refresh(exam)
+        return exam
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-def delete_exam(db: Session, exam_id: int) -> bool:
-    """
-    Delete an exam by ID.
-    Returns True if the exam was deleted, False if it wasn't found.
-    """
-    db_exam = get_exam(db, exam_id)
-    if not db_exam:
-        return False
-
-    db.delete(db_exam)
-    db.commit()
-    return True
+def delete_exam(db: Session, exam_id: int, user_id: int) -> None:
+    exam = get_exam(db, exam_id)
+    exam.is_deleted = True
+    exam.updated_by = user_id
+    try:
+        db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-def get_exams_by_course(db: Session, course_id: int, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
-    """
-    Get all exams for a specific course.
-    """
-    return get_exams(db, skip=skip, limit=limit, course_id=course_id)
+def get_submissions(db: Session, skip: int = 0, limit: int = 100) -> list[Type[ExamSubmission]]:
+    return (
+        db.query(ExamSubmission)
+        .filter(ExamSubmission.is_deleted.is_(False))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
-def get_exams_by_teacher(db: Session, teacher_id: int, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
-    """
-    Get all exams created by a specific teacher.
-    """
-    return get_exams(db, skip=skip, limit=limit, teacher_id=teacher_id)
+def get_submission(db: Session, submission_id: int) -> Type[ExamSubmission]:
+    sub = (
+        db.query(ExamSubmission)
+        .filter(ExamSubmission.submission_id == submission_id, ExamSubmission.is_deleted.is_(False))
+        .first()
+    )
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    return sub
 
 
-def get_active_exams(db: Session, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
-    """
-    Get all active exams.
-    """
-    return get_exams(db, skip=skip, limit=limit, status=ExamStatus.ACTIVE)
+def create_submission(db: Session, data: ExamSubmissionCreate, user_id: int) -> ExamSubmission:
+    sub = ExamSubmission(**data.model_dump(), created_by=user_id, updated_by=user_id)
+    try:
+        db.add(sub)
+        db.commit()
+        db.refresh(sub)
+        return sub
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+def update_submission(db: Session, submission_id: int, data: ExamSubmissionUpdate, user_id: int) -> Type[
+    ExamSubmission]:
+    sub = get_submission(db, submission_id)
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(sub, field, value)
+    sub.updated_by = user_id
+    try:
+        db.commit()
+        db.refresh(sub)
+        return sub
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+def delete_submission(db: Session, submission_id: int, user_id: int) -> None:
+    sub = get_submission(db, submission_id)
+    sub.is_deleted = True
+    sub.updated_by = user_id
+    try:
+        db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

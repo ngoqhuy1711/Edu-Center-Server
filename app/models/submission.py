@@ -1,91 +1,132 @@
-import enum
+from datetime import datetime
+from enum import Enum
+from typing import Optional
 
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import ENUM
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.core.database import Base
-
-
-class SubmissionType(enum.Enum):
-    file = 'file'
-    text = 'text'
-    url = 'url'
+from app.models.assignment import Assignment
+from app.models.course import Course
+from app.models.lesson import Lesson
+from app.models.user import User
 
 
-class SubmissionStatus(enum.Enum):
-    submitted = 'submitted'
-    graded = 'graded'
-    late = 'late'
-    resubmitted = 'resubmitted'
+class SubmissionType(str, Enum):
+    TEXT = "text"
+    FILE = "file"
+    LINK = "link"
+    OTHER = "other"
 
 
-class Submission(Base):
-    __tablename__ = 'submissions'
+class SubmissionStatus(str, Enum):
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    GRADED = "graded"
+    LATE = "late"
+    RESUBMITTED = "resubmitted"
 
-    submission_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
-    course_id = Column(Integer, ForeignKey('courses.course_id', ondelete='CASCADE'), nullable=False)
-    lesson_id = Column(Integer, ForeignKey('lessons.lesson_id', ondelete='SET NULL'), nullable=True)
-    assignment_id = Column(Integer, ForeignKey('assignments.assignment_id', ondelete='CASCADE'), nullable=False)
-    submission_type = Column(ENUM(SubmissionType, name='submission_type'), nullable=False)
-    status = Column(ENUM(SubmissionStatus, name='submission_status'), nullable=False,
-                    default=SubmissionStatus.submitted)
-    title = Column(String(255), nullable=False)
-    content = Column(Text, nullable=True)
-    score = Column(Float, nullable=True)
-    max_score = Column(Float, nullable=True)
-    graded_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    feedback = Column(Text, nullable=True)
-    submitted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    graded_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    is_deleted = Column(Boolean, default=False)
 
-    user = relationship('User', foreign_keys=[user_id], back_populates='submissions')  # type: ignore
-    course = relationship('Course', back_populates='submissions')
-    lesson = relationship('Lesson', back_populates='submissions')
-    assignment = relationship('Assignment', back_populates='submissions')
-    grader = relationship('User', foreign_keys=[graded_by], back_populates='graded_submissions')  # type: ignore
-    attachments = relationship('SubmissionAttachment', back_populates='submission', cascade='all, delete-orphan')
-    creator = relationship('User', foreign_keys=[created_by])  # type: ignore
-    updater = relationship('User', foreign_keys=[updated_by])  # type: ignore
-
-    __table_args__ = (
-        Index('idx_submissions_user_id', 'user_id'),
-        Index('idx_submissions_course_id', 'course_id'),
-        Index('idx_submissions_lesson_id', 'lesson_id'),
-        Index('idx_submissions_assignment_id', 'assignment_id'),
-        Index('idx_submissions_graded_by', 'graded_by'),
-        Index('idx_submissions_submitted_at', 'submitted_at'),
-        Index('idx_submissions_is_deleted', 'is_deleted'),
+class Submission(SQLModel, table=True):
+    __tablename__ = "submissions"
+    submission_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    user_id: int = Field(foreign_key="users.user_id", nullable=False)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    lesson_id: Optional[int] = Field(foreign_key="lessons.lesson_id", nullable=True)
+    assignment_id: int = Field(foreign_key="assignments.assignment_id", nullable=False)
+    submission_type: SubmissionType = Field(sa_column_kwargs={"nullable": False})
+    status: SubmissionStatus = Field(default=SubmissionStatus.SUBMITTED, sa_column_kwargs={"nullable": False})
+    title: str = Field(..., max_length=255)
+    content: Optional[str] = Field(default=None)
+    score: Optional[float] = Field(default=None)
+    max_score: Optional[float] = Field(default=None)
+    graded_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    feedback: Optional[str] = Field(default=None)
+    submitted_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
     )
-
-
-class SubmissionAttachment(Base):
-    __tablename__ = 'submission_attachments'
-
-    attachment_id = Column(Integer, primary_key=True, index=True)
-    submission_id = Column(Integer, ForeignKey('submissions.submission_id', ondelete='CASCADE'), nullable=False)
-    file_name = Column(String(255), nullable=False)
-    file_path = Column(String(512), nullable=False)
-    file_type = Column(String(100), nullable=True)
-    file_size = Column(Integer, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
-    is_deleted = Column(Boolean, default=False)
-
-    submission = relationship('Submission', back_populates='attachments')
-    creator = relationship('User', foreign_keys=[created_by])  # type: ignore
-    updater = relationship('User', foreign_keys=[updated_by])  # type: ignore
-
-    __table_args__ = (
-        Index('idx_submission_attachments_submission_id', 'submission_id'),
-        Index('idx_submission_attachments_is_deleted', 'is_deleted'),
+    graded_at: Optional[datetime] = Field(
+        default=None,
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": True
+        }
     )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
+
+    user: "User" = Relationship(back_populates="submissions",
+                                sa_relationship_kwargs={"foreign_keys": "[Submission.user_id]"})
+    course: "Course" = Relationship(back_populates="submissions",
+                                    sa_relationship_kwargs={"foreign_keys": "[Submission.course_id]"})
+    lesson: Optional["Lesson"] = Relationship(back_populates="submissions",
+                                              sa_relationship_kwargs={"foreign_keys": "[Submission.lesson_id]"})
+    assignment: "Assignment" = Relationship(back_populates="submissions",
+                                            sa_relationship_kwargs={"foreign_keys": "[Submission.assignment_id]"})
+    graded_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Submission.graded_by]"})
+    created_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Submission.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Submission.updated_by]"})
+
+    def __repr__(self) -> str:
+        return f"Submission(submission_id={self.submission_id}, user_id={self.user_id}, course_id={self.course_id}, lesson_id={self.lesson_id}, assignment_id={self.assignment_id}, submission_type={self.submission_type})"
+
+
+class SubmissionAttachment(SQLModel, table=True):
+    __tablename__ = "submission_attachments"
+    attachment_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    submission_id: int = Field(foreign_key="submissions.submission_id", nullable=False)
+    file_name: str = Field(..., max_length=255)
+    file_path: str = Field(..., max_length=512)
+    file_type: Optional[str] = Field(default=None, max_length=100)
+    file_size: Optional[int] = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
+
+    submission: "Submission" = Relationship(back_populates="attachments",
+                                            sa_relationship_kwargs={
+                                                "foreign_keys": "[SubmissionAttachment.submission_id]"})
+    created_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[SubmissionAttachment.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[SubmissionAttachment.updated_by]"})
+
+    def __repr__(self) -> str:
+        return f"SubmissionAttachment(attachment_id={self.attachment_id}, submission_id={self.submission_id}, file_name={self.file_name})"

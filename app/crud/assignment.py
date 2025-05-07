@@ -1,128 +1,64 @@
-from datetime import datetime
-from typing import Optional, Type
+from typing import Sequence
 
-from sqlalchemy import and_
-from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
+from sqlmodel import Session, select
 
 from app.models.assignment import Assignment
-from app.schemas.assignment import AssignmentCreate, AssignmentUpdate, AssignmentStatus
 
 
-async def create_assignment(db: Session, assignment: AssignmentCreate, teacher_id: int) -> Assignment:
-    """
-    Create a new assignment
-    """
-    db_assignment = Assignment(
-        **assignment.model_dump(),
-        teacher_id=teacher_id,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-        is_active=True
+def get_assignment(db: Session, assignment_id: int) -> Assignment:
+    statement = select(Assignment).where(
+        Assignment.assignment_id == assignment_id,
+        Assignment.is_deleted == False
     )
+    assignment = db.scalars(statement).first()
+    if not assignment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+    return assignment
 
-    db.add(db_assignment)
+
+def get_assignments(db: Session, skip: int = 0, limit: int = 100) -> Sequence[Assignment]:
+    statement = (
+        select(Assignment)
+        .where(Assignment.is_deleted == False)
+        .offset(skip)
+        .limit(limit)
+    )
+    return db.scalars(statement).all()
+
+
+def create_assignment(db: Session, assignment: Assignment, current_user) -> Assignment:
+    if current_user.user_id != assignment.teacher_id and not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+    assignment.created_by = current_user.user_id
+    assignment.updated_by = current_user.user_id
+    db.add(assignment)
     db.commit()
-    db.refresh(db_assignment)
-    return db_assignment
+    db.refresh(assignment)
+    return assignment
 
 
-async def get_assignment(db: Session, assignment_id: int) -> Optional[Assignment]:
-    """
-    Get an assignment by ID
-    """
-    return db.query(Assignment).filter(Assignment.assignment_id == assignment_id).first()
-
-
-async def get_assignments(
-        db: Session,
-        skip: int = 0,
-        limit: int = 100,
-        course_id: Optional[int] = None,
-        teacher_id: Optional[int] = None,
-        status: Optional[AssignmentStatus] = None,
-        active_only: bool = True
-) -> list[Type[Assignment]]:
-    """
-    Get assignments with optional filters
-    """
-    query = db.query(Assignment)
-
-    filters = []
-    if course_id is not None:
-        filters.append(Assignment.course_id == course_id)
-
-    if teacher_id is not None:
-        filters.append(Assignment.teacher_id == teacher_id)
-
-    if status is not None:
-        filters.append(Assignment.status == status)
-
-    if active_only:
-        filters.append(Assignment.is_active == True)
-
-    if filters:
-        query = query.filter(and_(*filters))
-
-    return query.offset(skip).limit(limit).all()
-
-
-async def get_course_assignments(db: Session, course_id: int) -> list[Type[Assignment]]:
-    """
-    Get all assignments for a specific course
-    """
-    return db.query(Assignment).filter(
-        Assignment.course_id == course_id,
-        Assignment.is_active == True
-    ).all()
-
-
-async def update_assignment(
-        db: Session,
-        assignment_id: int,
-        assignment_data: AssignmentUpdate
-) -> Optional[Assignment]:
-    """
-    Update an assignment
-    """
-    db_assignment = await get_assignment(db, assignment_id)
-    if not db_assignment:
-        return None
-
+def update_assignment(db: Session, assignment_id: int, assignment_data: Assignment, current_user) -> Assignment:
+    assignment = get_assignment(db, assignment_id)
+    if current_user.user_id != assignment.teacher_id and not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     update_data = assignment_data.model_dump(exclude_unset=True)
-
-    for field, value in update_data.items():
-        setattr(db_assignment, field, value)
-
-    db_assignment.updated_at = datetime.now()
-
+    for key, value in update_data.items():
+        setattr(assignment, key, value)
+    assignment.updated_by = current_user.user_id
+    db.add(assignment)
     db.commit()
-    db.refresh(db_assignment)
-    return db_assignment
+    db.refresh(assignment)
+    return assignment
 
 
-async def delete_assignment(db: Session, assignment_id: int) -> bool:
-    """
-    Delete an assignment (soft delete by setting is_active to False)
-    """
-    db_assignment = await get_assignment(db, assignment_id)
-    if not db_assignment:
-        return False
-
-    db_assignment.is_active = False
-    db_assignment.updated_at = datetime.now()
-
+def delete_assignment(db: Session, assignment_id: int, current_user) -> Assignment:
+    assignment = get_assignment(db, assignment_id)
+    if current_user.user_id != assignment.teacher_id and not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+    assignment.is_deleted = True
+    assignment.updated_by = current_user.user_id
+    db.add(assignment)
     db.commit()
-    return True
-
-
-async def hard_delete_assignment(db: Session, assignment_id: int) -> bool:
-    """
-    Hard delete an assignment from database
-    """
-    db_assignment = await get_assignment(db, assignment_id)
-    if not db_assignment:
-        return False
-
-    db.delete(db_assignment)
-    db.commit()
-    return True
+    db.refresh(assignment)
+    return assignment

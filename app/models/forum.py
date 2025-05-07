@@ -1,90 +1,162 @@
 from datetime import datetime, UTC
 from enum import Enum
+from typing import Optional
 
-from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum as SQLAlchemyEnum
-)
-from sqlalchemy.orm import relationship
+from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.core.database import Base
+from app.models.course import Course
+from app.models.user import User
 
 
-class TopicType(str, Enum):
+class ForumPostStatus(str, Enum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    HIDDEN = "hidden"
+    ARCHIVED = "archived"
+
+
+class ForumPostType(str, Enum):
     DISCUSSION = "discussion"
     QUESTION = "question"
     ANNOUNCEMENT = "announcement"
+    RESOURCES = "resources"
 
 
-class TopicStatus(str, Enum):
-    OPEN = "open"
-    CLOSED = "closed"
-    RESOLVED = "resolved"
+class ForumTopicStatus(str, Enum):
+    ACTIVE = "active"
+    LOCKED = "locked"
+    HIDDEN = "hidden"
+    ARCHIVED = "archived"
 
 
-class PostType(str, Enum):
-    QUESTION = "question"
-    ANSWER = "answer"
-    COMMENT = "comment"
+class ForumTopicType(str, Enum):
+    GENERAL = "general"
+    ANNOUNCEMENTS = "announcements"
+    QUESTIONS = "questions"
+    DISCUSSIONS = "discussions"
+    ASSIGNMENTS = "assignments"
 
 
-class PostStatus(str, Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    FLAGGED = "flagged"
+class ForumPost(SQLModel, table=True):
+    __tablename__ = "forum_posts"
+    post_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    title: str = Field(..., max_length=255)
+    content: str = Field(...)
+    author_id: int = Field(foreign_key="users.user_id", nullable=False)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    parent_post_id: Optional[int] = Field(default=None, foreign_key="forum_posts.post_id")
+    post_type: ForumPostType = Field(default=ForumPostType.DISCUSSION)
+    status: ForumPostStatus = Field(default=ForumPostStatus.DRAFT)
+    is_pinned: bool = Field(default=False)
+    view_count: int = Field(default=0)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
+
+    author: "User" = Relationship(back_populates="forum_posts",
+                                            sa_relationship_kwargs={"foreign_keys": "[ForumPost.author_id]"})
+    course: "Course" = Relationship(back_populates="forum_posts",
+                                              sa_relationship_kwargs={"foreign_keys": "[ForumPost.course_id]"})
+    parent_post: Optional["ForumPost"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ForumPost.parent_post_id]"},
+        back_populates="child_posts"
+    )
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[ForumPost.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[ForumPost.updated_by]"})
+
+    def __repr__(self) -> str:
+        return f"ForumPost(post_id={self.post_id}, title={self.title}, author_id={self.author_id}, course_id={self.course_id})"
 
 
-class ForumTopic(Base):
-    __tablename__ = 'forum_topics'
+class ForumTopic(SQLModel, table=True):
+    __tablename__ = "forum_topics"
+    topic_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    title: str = Field(..., max_length=255)
+    description: Optional[str] = Field(default=None)
+    creator_id: int = Field(foreign_key="users.user_id", nullable=False)
+    course_id: int = Field(foreign_key="courses.course_id", nullable=False)
+    topic_type: ForumTopicType = Field(default=ForumTopicType.GENERAL)
+    status: ForumTopicStatus = Field(default=ForumTopicStatus.ACTIVE)
+    is_pinned: bool = Field(default=False)
+    view_count: int = Field(default=0)
+    last_activity: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
 
-    topic_id = Column(Integer, primary_key=True)
-    course_id = Column(Integer, ForeignKey('courses.course_id'), nullable=False)
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    type = Column(SQLAlchemyEnum(TopicType), default=TopicType.DISCUSSION, nullable=False)
-    status = Column(SQLAlchemyEnum(TopicStatus), default=TopicStatus.OPEN, nullable=False)
-    is_pinned = Column(Boolean, default=False)
-    is_locked = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC))
-    created_by = Column(Integer, ForeignKey('users.user_id'))
-    updated_by = Column(Integer, ForeignKey('users.user_id'))
-    is_deleted = Column(Boolean, default=False)
+    creator: "User" = Relationship(back_populates="forum_topics",
+                                             sa_relationship_kwargs={"foreign_keys": "[ForumTopic.creator_id]"})
+    course: "Course" = Relationship(back_populates="forum_topics",
+                                              sa_relationship_kwargs={"foreign_keys": "[ForumTopic.course_id]"})
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[ForumTopic.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[ForumTopic.updated_by]"})
 
-    course = relationship("Course")
-    posts = relationship("ForumPost", back_populates="topic")
-    creator = relationship("User", foreign_keys=[created_by])  # type: ignore
+    def __repr__(self) -> str:
+        return f"ForumTopic(topic_id={self.topic_id}, title={self.title}, creator_id={self.creator_id}, course_id={self.course_id})"
 
 
-class ForumPost(Base):
-    __tablename__ = 'forum_posts'
+class PostLike(SQLModel, table=True):
+    __tablename__ = "post_likes"
+    like_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    post_id: int = Field(foreign_key="forum_posts.post_id", nullable=False)
+    user_id: int = Field(foreign_key="users.user_id", nullable=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
 
-    post_id = Column(Integer, primary_key=True)
-    topic_id = Column(Integer, ForeignKey('forum_topics.topic_id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
-    parent_post_id = Column(Integer, ForeignKey('forum_posts.post_id'))
-    content = Column(Text, nullable=False)
-    type = Column(SQLAlchemyEnum(PostType), default=PostType.COMMENT, nullable=False)
-    status = Column(SQLAlchemyEnum(PostStatus), default=PostStatus.APPROVED, nullable=False)
-    is_solution = Column(Boolean, default=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC))
-    created_by = Column(Integer, ForeignKey('users.user_id'))
-    updated_by = Column(Integer, ForeignKey('users.user_id'))
-    is_deleted = Column(Boolean, default=False)
+    post: "ForumPost" = Relationship(back_populates="likes",
+                                               sa_relationship_kwargs={"foreign_keys": "[PostLike.post_id]"})
+    user: "User" = Relationship(back_populates="post_likes",
+                                          sa_relationship_kwargs={"foreign_keys": "[PostLike.user_id]"})
 
-    topic = relationship("ForumTopic", back_populates="posts")
-    user = relationship("User", foreign_keys=[user_id])  # type: ignore
-    parent_post = relationship("ForumPost", remote_side="[post_id]", backref="replies")
-    likes = relationship("PostLike", back_populates="post")
-
-
-class PostLike(Base):
-    __tablename__ = 'post_likes'
-
-    like_id = Column(Integer, primary_key=True)
-    post_id = Column(Integer, ForeignKey('forum_posts.post_id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC))
-    is_deleted = Column(Boolean, default=False)
-
-    post = relationship("ForumPost", back_populates="likes")
-    user = relationship("User", foreign_keys=[user_id])  # type: ignore
+    def __repr__(self) -> str:
+        return f"PostLike(like_id={self.like_id}, post_id={self.post_id}, user_id={self.user_id})"

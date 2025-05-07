@@ -1,63 +1,108 @@
-import enum
 from datetime import datetime, UTC
+from enum import Enum
+from typing import Optional
 
-from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum
-)
-from sqlalchemy.orm import relationship
+from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.core.database import Base
+from app.models.course import Course
+from app.models.user import User
 
 
-class MessageType(enum.Enum):
+class MessageType(str, Enum):
     DIRECT = "direct"
-    COURSE = "course"
-    SYSTEM = "system"
+    GROUP = "group"
     ANNOUNCEMENT = "announcement"
-    FEEDBACK = "feedback"
 
 
-class Message(Base):
-    __tablename__ = 'messages'
-
-    message_id = Column(Integer, primary_key=True)
-    sender_id = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    recipient_id = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    message_type = Column(Enum(MessageType), nullable=False)
-    subject = Column(String(255), nullable=False)
-    content = Column(Text)
-    is_read = Column(Boolean, default=False)
-    read_at = Column(DateTime(timezone=True))
-    course_id = Column(Integer, ForeignKey('courses.course_id', ondelete='SET NULL'))
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC), nullable=False)
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    is_deleted = Column(Boolean, default=False)
-
-    sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")  # type: ignore
-    recipient = relationship("User", foreign_keys=[recipient_id], back_populates="received_messages")  # type: ignore
-    course = relationship("Course", back_populates="messages")
-    attachments = relationship("MessageAttachment", back_populates="message", cascade="all, delete-orphan")
-    creator = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updater = relationship("User", foreign_keys=[updated_by])  # type: ignore
+class MessageStatus(str, Enum):
+    UNREAD = "unread"
+    READ = "read"
+    REPLIED = "replied"
+    FORWARDED = "forwarded"
 
 
-class MessageAttachment(Base):
-    __tablename__ = 'message_attachments'
+class Message(SQLModel, table=True):
+    __tablename__ = "messages"
+    message_id: Optional[int] = Field(default=None, primary_key=True)
+    sender_id: int = Field(foreign_key="users.user_id", nullable=False)
+    recipient_id: Optional[int] = Field(foreign_key="users.user_id", nullable=True)
+    subject: str = Field(..., max_length=255)
+    content: str = Field(...)
+    message_type: MessageType = Field(default=MessageType.DIRECT)
+    status: MessageStatus = Field(default=MessageStatus.UNREAD)
+    is_read: bool = Field(default=False)
+    read_at: Optional[datetime] = Field(
+        default=None,
+        sa_column_kwargs={
+            "nullable": True
+        }
+    )
+    course_id: Optional[int] = Field(foreign_key="courses.course_id", nullable=True)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
 
-    attachment_id = Column(Integer, primary_key=True)
-    message_id = Column(Integer, ForeignKey('messages.message_id', ondelete='CASCADE'), nullable=False)
-    file_name = Column(String(255), nullable=False)
-    file_path = Column(String(512), nullable=False)
-    file_type = Column(String(100))
-    file_size = Column(Integer)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(UTC), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(UTC), onupdate=datetime.now(UTC), nullable=False)
-    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    updated_by = Column(Integer, ForeignKey('users.user_id', ondelete='SET NULL'))
-    is_deleted = Column(Boolean, default=False)
+    sender: User = Relationship(back_populates="sent_messages",
+                                sa_relationship_kwargs={"foreign_keys": "[Message.sender_id]"})
+    recipient: Optional[User] = Relationship(back_populates="received_messages",
+                                             sa_relationship_kwargs={"foreign_keys": "[Message.recipient_id]"})
+    course: Optional[Course] = Relationship(back_populates="messages",
+                                            sa_relationship_kwargs={"foreign_keys": "[Message.course_id]"})
+    created_by_user: Optional[User] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Message.created_by]"})
+    updated_by_user: Optional[User] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Message.updated_by]"})
 
-    message = relationship("Message", back_populates="attachments")
-    creator = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updater = relationship("User", foreign_keys=[updated_by])  # type: ignore
+    def __repr__(self) -> str:
+        return f"Message(message_id={self.message_id}, sender_id={self.sender_id}, recipient_id={self.recipient_id}, subject={self.subject})"
+
+
+class MessageAttachment(SQLModel, table=True):
+    __tablename__ = "message_attachments"
+    attachment_id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="messages.message_id", nullable=False)
+    file_name: str = Field(..., max_length=255)
+    file_path: str = Field(..., max_length=512)
+    file_type: Optional[str] = Field(default=None, max_length=100)
+    file_size: Optional[int] = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
+
+    message: "Message" = Relationship(back_populates="attachments",
+                                      sa_relationship_kwargs={"foreign_keys": "[MessageAttachment.message_id]"})
+    created_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[MessageAttachment.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[MessageAttachment.updated_by]"})
+
+    def __repr__(self) -> str:
+        return f"MessageAttachment(attachment_id={self.attachment_id}, message_id={self.message_id}, file_name={self.file_name})"

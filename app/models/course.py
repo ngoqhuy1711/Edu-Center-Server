@@ -1,87 +1,124 @@
 import enum
+from datetime import datetime, UTC
+from typing import Optional
 
-from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Enum, func
-)
-from sqlalchemy.orm import relationship
+from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.core.database import Base
+from app.models.user import User
 
 
 class CourseStatus(enum.Enum):
-    DRAFT = "draft"
     ACTIVE = "active"
-    ARCHIVED = "archived"
+    UPCOMING = "upcoming"
     COMPLETED = "completed"
+    ARCHIVED = "archived"
+
+
+class CourseLevel(enum.Enum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
 
 
 class MemberRole(enum.Enum):
     STUDENT = "student"
-    TEACHING_ASSISTANT = "teaching_assistant"
-    OBSERVER = "observer"
+    TEACHER = "teacher"
+    STAFF = "staff"
+    ADMIN = "admin"
 
 
-class MemberStatus(enum.Enum):
-    PENDING = "pending"
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-
-
-class Course(Base):
+class Course(SQLModel, table=True):
     __tablename__ = "courses"
+    course_id: Optional[int] = Field(default=None, primary_key=True)
+    course_code: str = Field(..., max_length=20, index=True)
+    title: str = Field(..., max_length=200)
+    description: Optional[str] = None
+    level: CourseLevel = Field(default=CourseLevel.BEGINNER)
+    teacher_id: int = Field(foreign_key="users.user_id")
+    credits: int = Field(default=0)
+    max_students: int = Field(default=30)
+    price: Optional[float] = Field(default=None, ge=0)
+    start_date: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "nullable": False
+        }
+    )
+    end_date: datetime = Field(
+        ...,
+        sa_column_kwargs={
+            "nullable": False
+        }
+    )
+    image_url: Optional[str] = Field(default=None, max_length=255)
+    syllabus: Optional[str] = None
+    prerequisites: Optional[str] = None
+    location: Optional[str] = Field(default=None, max_length=100)
+    status: CourseStatus = Field(default=CourseStatus.UPCOMING)
+    is_published: bool = Field(default=False)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
 
-    course_id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    code = Column(String(50), nullable=False, unique=True)
-    description = Column(Text)
-    start_date = Column(DateTime(timezone=True))
-    end_date = Column(DateTime(timezone=True))
-    credit_hours = Column(Integer)
-    status = Column(Enum(CourseStatus), default=CourseStatus.DRAFT, nullable=False)
-    enrollment_limit = Column(Integer)
-    teacher_id = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    department_id = Column(Integer, ForeignKey("departments.department_id", ondelete="SET NULL"))
-    created_at = Column(DateTime(timezone=True), default=func.current_timestamp(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp(),
-                        nullable=False)
-    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    is_deleted = Column(Boolean, default=False)
+    created_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
+    is_deleted: bool = Field(default=False)
 
-    members = relationship("CourseMember", back_populates="course", cascade="all, delete-orphan")
-    assignments = relationship("Assignment", back_populates="course", cascade="all, delete-orphan")
-    teacher = relationship("User", foreign_keys="[teacher_id]")
-    created_by_user = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updated_by_user = relationship("User", foreign_keys=[updated_by])  # type: ignore
-    department = relationship("Department")
-    lessons = relationship("Lesson", back_populates="course", cascade="all, delete-orphan")
-    teaching_materials = relationship("TeachingMaterial", back_populates="course", cascade="all, delete-orphan")
-    submissions = relationship("Submission", back_populates="course", cascade="all, delete-orphan")
+    teacher: "User" = Relationship(back_populates="courses",
+                                   sa_relationship_kwargs={"foreign_keys": "[Course.teacher_id]"})
+    created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Course.created_by]"})
+    updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Course.updated_by]"})
 
-    def __repr__(self):
-        return f"<Course {self.title} (Code: {self.code})>"
+    def __repr__(self) -> str:
+        return f"Course(course_id={self.course_id}, title={self.title}, teacher_id={self.teacher_id})"
 
-
-class CourseMember(Base):
+class CourseMember(SQLModel, table=True):
     __tablename__ = "course_members"
+    course_member_id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="courses.course_id")
+    user_id: int = Field(foreign_key="users.user_id")
+    role: MemberRole
+    is_active: bool = Field(default=True)
+    joined_date: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    access_level: int = Field(default=1)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "nullable": False
+        }
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column_kwargs={
+            "server_default": func.current_timestamp(),
+            "onupdate": func.current_timestamp(),
+            "nullable": False
+        }
+    )
 
-    member_id = Column(Integer, primary_key=True, index=True)
-    course_id = Column(Integer, ForeignKey("courses.course_id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    role = Column(Enum(MemberRole), default=MemberRole.STUDENT, nullable=False)
-    status = Column(Enum(MemberStatus), default=MemberStatus.PENDING, nullable=False)
-    joined_at = Column(DateTime(timezone=True), default=func.current_timestamp(), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.current_timestamp(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp(),
-                        nullable=False)
-    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    updated_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"))
-    is_deleted = Column(Boolean, default=False)
+    course: "Course" = Relationship(back_populates="members",
+                                    sa_relationship_kwargs={"foreign_keys": "[CourseMember.course_id]"})
+    user: "User" = Relationship(back_populates="course_members",
+                                sa_relationship_kwargs={"foreign_keys": "[CourseMember.user_id]"})
 
-    course = relationship("Course", back_populates="members")
-    user = relationship("User", foreign_keys="[user_id]")
-    created_by_user = relationship("User", foreign_keys=[created_by])  # type: ignore
-    updated_by_user = relationship("User", foreign_keys=[updated_by])  # type: ignore
-
-    def __repr__(self):
-        return f"<CourseMember {self.user_id} in Course {self.course_id}>"
+    def __repr__(self) -> str:
+        return f"CourseMember(course_member_id={self.course_member_id}, course_id={self.course_id}, user_id={self.user_id}, role={self.role})"
