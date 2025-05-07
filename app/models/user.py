@@ -1,11 +1,23 @@
 from datetime import datetime, UTC
-from typing import Optional, Dict
+from typing import Optional, Dict, List, TYPE_CHECKING
 
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import SQLModel, Field, func, PrimaryKeyConstraint, Relationship
 
 from app.models.role import Role
+
+if TYPE_CHECKING:
+    from app.models.course import Course, CourseMember
+    from app.models.message import Message
+    from app.models.assignment import Assignment
+    from app.models.submission import Submission
+    from app.models.exam import Exam, ExamSubmission
+    from app.models.forum import ForumPost, ForumTopic, PostLike
+    from app.models.payment import Payment
+    from app.models.enrollment_request import EnrollmentRequest
+    from app.models.lesson import UserLessonProgress
+    from app.models.staff_assignment import StaffAssignment
 
 
 class User(SQLModel, table=True):
@@ -31,10 +43,60 @@ class User(SQLModel, table=True):
         }
     )
 
-    profiles: list["UserProfile"] = Relationship(back_populates="user",
+    profiles: List["UserProfile"] = Relationship(back_populates="user",
                                                  sa_relationship_kwargs={"foreign_keys": "[UserProfile.user_id]"})
-    roles: list["UserRole"] = Relationship(back_populates="user",
+    roles: List["UserRole"] = Relationship(back_populates="user",
                                            sa_relationship_kwargs={"foreign_keys": "[UserRole.user_id]"})
+    
+    # Course relationships
+    courses: List["Course"] = Relationship(back_populates="teacher",
+                                          sa_relationship_kwargs={"foreign_keys": "[Course.teacher_id]"})
+    course_members: List["CourseMember"] = Relationship(back_populates="user",
+                                                       sa_relationship_kwargs={"foreign_keys": "[CourseMember.user_id]"})
+    
+    # Message relationships
+    sent_messages: List["Message"] = Relationship(back_populates="sender",
+                                                sa_relationship_kwargs={"foreign_keys": "[Message.sender_id]"})
+    received_messages: List["Message"] = Relationship(back_populates="recipient",
+                                                    sa_relationship_kwargs={"foreign_keys": "[Message.recipient_id]"})
+    
+    # Assignment relationships
+    assignments: List["Assignment"] = Relationship(back_populates="teacher",
+                                                 sa_relationship_kwargs={"foreign_keys": "[Assignment.teacher_id]"})
+    
+    # Submission relationships
+    submissions: List["Submission"] = Relationship(back_populates="user",
+                                                 sa_relationship_kwargs={"foreign_keys": "[Submission.user_id]"})
+    
+    # Exam relationships
+    exams: List["Exam"] = Relationship(back_populates="teacher",
+                                      sa_relationship_kwargs={"foreign_keys": "[Exam.teacher_id]"})
+    exam_submissions: List["ExamSubmission"] = Relationship(back_populates="student",
+                                                          sa_relationship_kwargs={"foreign_keys": "[ExamSubmission.student_id]"})
+    
+    # Forum relationships
+    forum_posts: List["ForumPost"] = Relationship(back_populates="author",
+                                                sa_relationship_kwargs={"foreign_keys": "[ForumPost.author_id]"})
+    forum_topics: List["ForumTopic"] = Relationship(back_populates="creator",
+                                                  sa_relationship_kwargs={"foreign_keys": "[ForumTopic.creator_id]"})
+    post_likes: List["PostLike"] = Relationship(back_populates="user",
+                                              sa_relationship_kwargs={"foreign_keys": "[PostLike.user_id]"})
+    
+    # Payment relationships
+    payments: List["Payment"] = Relationship(back_populates="user",
+                                           sa_relationship_kwargs={"foreign_keys": "[Payment.user_id]"})
+    
+    # Enrollment request relationships
+    enrollment_requests: List["EnrollmentRequest"] = Relationship(back_populates="user",
+                                                                sa_relationship_kwargs={"foreign_keys": "[EnrollmentRequest.user_id]"})
+    
+    # Lesson progress relationships
+    lesson_progress: List["UserLessonProgress"] = Relationship(back_populates="user",
+                                                             sa_relationship_kwargs={"foreign_keys": "[UserLessonProgress.user_id]"})
+    
+    # Staff assignment relationships
+    staff_assignments: List["StaffAssignment"] = Relationship(back_populates="staff",
+                                                            sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.staff_id]"})
 
     def __repr__(self) -> str:
         return f"User(user_id={self.user_id}, username={self.username}, email={self.email})"

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
 from sqlmodel import SQLModel, Field, Relationship, func
 
@@ -41,7 +41,7 @@ class Submission(SQLModel, table=True):
     graded_by: Optional[int] = Field(default=None, foreign_key="users.user_id")
     feedback: Optional[str] = Field(default=None)
     submitted_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "nullable": False
@@ -56,14 +56,14 @@ class Submission(SQLModel, table=True):
         }
     )
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "nullable": False
         }
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "onupdate": func.current_timestamp(),
@@ -88,6 +88,8 @@ class Submission(SQLModel, table=True):
         sa_relationship_kwargs={"foreign_keys": "[Submission.created_by]"})
     updated_by_user: Optional["User"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Submission.updated_by]"})
+    attachments: List["SubmissionAttachment"] = Relationship(back_populates="submission",
+                                                           sa_relationship_kwargs={"foreign_keys": "[SubmissionAttachment.submission_id]"})
 
     def __repr__(self) -> str:
         return f"Submission(submission_id={self.submission_id}, user_id={self.user_id}, course_id={self.course_id}, lesson_id={self.lesson_id}, assignment_id={self.assignment_id}, submission_type={self.submission_type})"
@@ -102,14 +104,14 @@ class SubmissionAttachment(SQLModel, table=True):
     file_type: Optional[str] = Field(default=None, max_length=100)
     file_size: Optional[int] = Field(default=None)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "nullable": False
         }
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "onupdate": func.current_timestamp(),

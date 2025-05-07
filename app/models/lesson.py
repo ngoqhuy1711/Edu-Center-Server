@@ -1,10 +1,16 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship, func
 from datetime import datetime, UTC
 
 from app.models.course import Course
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from app.models.assignment import Assignment
+    from app.models.submission import Submission
+    from app.models.teaching_material import TeachingMaterial
+    from app.models.staff_assignment import StaffAssignment
 
 
 class LessonStatus(str, Enum):
@@ -69,6 +75,20 @@ class Lesson(SQLModel, table=True):
                                      sa_relationship_kwargs={"foreign_keys": "[Lesson.course_id]"})
     created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Lesson.created_by]"})
     updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Lesson.updated_by]"})
+    
+    # Add relationships to other models
+    assignments: List["Assignment"] = Relationship(back_populates="lesson",
+                                                 sa_relationship_kwargs={"foreign_keys": "[Assignment.lesson_id]"})
+    submissions: List["Submission"] = Relationship(back_populates="lesson",
+                                                 sa_relationship_kwargs={"foreign_keys": "[Submission.lesson_id]"})
+    resources: List["LessonResource"] = Relationship(back_populates="lesson",
+                                                   sa_relationship_kwargs={"foreign_keys": "[LessonResource.lesson_id]"})
+    user_progress: List["UserLessonProgress"] = Relationship(back_populates="lesson",
+                                                           sa_relationship_kwargs={"foreign_keys": "[UserLessonProgress.lesson_id]"})
+    teaching_materials: List["TeachingMaterial"] = Relationship(back_populates="lesson",
+                                                              sa_relationship_kwargs={"foreign_keys": "[TeachingMaterial.lesson_id]"})
+    staff_assignments: List["StaffAssignment"] = Relationship(back_populates="lesson",
+                                                            sa_relationship_kwargs={"foreign_keys": "[StaffAssignment.lesson_id]"})
 
     def __repr__(self) -> str:
         return f"Lesson(lesson_id={self.lesson_id}, title={self.title}, course_id={self.course_id})"

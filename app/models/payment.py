@@ -1,10 +1,11 @@
 from datetime import datetime, UTC
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Relationship, func
 
-from app.models.user import User
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class PaymentMethod(str, Enum):

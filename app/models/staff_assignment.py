@@ -1,8 +1,13 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Relationship, func
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.course import Course
+    from app.models.lesson import Lesson
 
 
 class StaffAssignmentRole(str, Enum):
@@ -43,14 +48,14 @@ class StaffAssignment(SQLModel, table=True):
     description: Optional[str] = Field(default=None)
     is_primary: bool = Field(default=False)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "nullable": False
         }
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "onupdate": func.current_timestamp(),

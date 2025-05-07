@@ -29,7 +29,7 @@ class Role(SQLModel, table=True):
         }
     )
 
-    users: list["UserRole"] = Relationship(back_populates="role",
+    users: List["UserRole"] = Relationship(back_populates="role",
                                            sa_relationship_kwargs={"foreign_keys": "[UserRole.role_id]"})
 
     def __repr__(self) -> str:

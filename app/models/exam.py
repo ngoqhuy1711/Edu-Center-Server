@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, UTC
-from typing import Optional
+from typing import Optional, List
 
 from sqlmodel import SQLModel, Field, Relationship, func
 
@@ -87,6 +87,8 @@ class Exam(SQLModel, table=True):
                                              sa_relationship_kwargs={"foreign_keys": "[Exam.teacher_id]"})
     created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Exam.created_by]"})
     updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Exam.updated_by]"})
+    exam_submissions: List["ExamSubmission"] = Relationship(back_populates="exam",
+                                                          sa_relationship_kwargs={"foreign_keys": "[ExamSubmission.exam_id]"})
 
     def __repr__(self) -> str:
         return f"Exam(exam_id={self.exam_id}, title={self.title}, course_id={self.course_id}, teacher_id={self.teacher_id})"

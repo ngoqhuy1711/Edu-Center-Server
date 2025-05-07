@@ -1,11 +1,14 @@
 from datetime import datetime, UTC
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Relationship, func
 
 from app.models.course import Course
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from app.models.forum import ForumPost
 
 
 class ForumPostStatus(str, Enum):
@@ -76,8 +79,14 @@ class ForumPost(SQLModel, table=True):
         sa_relationship_kwargs={"foreign_keys": "[ForumPost.parent_post_id]"},
         back_populates="child_posts"
     )
+    child_posts: List["ForumPost"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[ForumPost.parent_post_id]"},
+        back_populates="parent_post"
+    )
     created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[ForumPost.created_by]"})
     updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[ForumPost.updated_by]"})
+    likes: List["PostLike"] = Relationship(back_populates="post",
+                                          sa_relationship_kwargs={"foreign_keys": "[PostLike.post_id]"})
 
     def __repr__(self) -> str:
         return f"ForumPost(post_id={self.post_id}, title={self.title}, author_id={self.author_id}, course_id={self.course_id})"

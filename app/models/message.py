@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
 from sqlmodel import SQLModel, Field, Relationship, func
 
@@ -65,6 +65,8 @@ class Message(SQLModel, table=True):
                                             sa_relationship_kwargs={"foreign_keys": "[Message.course_id]"})
     created_by_user: Optional[User] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Message.created_by]"})
     updated_by_user: Optional[User] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Message.updated_by]"})
+    attachments: List["MessageAttachment"] = Relationship(back_populates="message",
+                                                        sa_relationship_kwargs={"foreign_keys": "[MessageAttachment.message_id]"})
 
     def __repr__(self) -> str:
         return f"Message(message_id={self.message_id}, sender_id={self.sender_id}, recipient_id={self.recipient_id}, subject={self.subject})"

@@ -1,12 +1,15 @@
 import enum
 from datetime import datetime, UTC
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Relationship, func
 
 from app.models.lesson import Lesson
 from app.models.submission import Submission
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from app.models.submission import Submission
 
 
 class AssignmentStatus(str, enum.Enum):
@@ -54,7 +57,7 @@ class Assignment(SQLModel, table=True):
     lesson: "Lesson" = Relationship(back_populates="assignments",
                                     sa_relationship_kwargs={"foreign_keys": "[Assignment.lesson_id]"})
     submissions: List["Submission"] = Relationship(back_populates="assignment",
-                                                   sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+                                                 sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     created_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Assignment.created_by]"})
     updated_by_user: Optional["User"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[Assignment.updated_by]"})
 

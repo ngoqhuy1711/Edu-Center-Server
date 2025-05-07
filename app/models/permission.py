@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 
 from sqlmodel import SQLModel, Field, func
@@ -12,14 +12,14 @@ class Permission(SQLModel, table=True):
     module: Optional[str] = Field(max_length=50, nullable=True)
     description: Optional[str] = Field(max_length=255, nullable=True)
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "nullable": False
         }
     )
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(),
+        default_factory=lambda: datetime.now(UTC),
         sa_column_kwargs={
             "server_default": func.current_timestamp(),
             "onupdate": func.current_timestamp(),

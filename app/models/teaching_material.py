@@ -1,7 +1,12 @@
 from datetime import datetime, UTC
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Relationship, func
+
+if TYPE_CHECKING:
+    from app.models.course import Course
+    from app.models.lesson import Lesson
+    from app.models.user import User
 
 
 class TeachingMaterial(SQLModel, table=True):
