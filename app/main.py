@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from .routers import auth
+from .api.v1.endpoints import auth
 
 app = FastAPI()
-app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 origins = [
     "http://127.0.0.1:5173"
 ]
