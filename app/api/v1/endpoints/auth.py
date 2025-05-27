@@ -18,7 +18,7 @@ def login(data: LoginRequest, session: Session = Depends(get_session)):
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     access_token = create_access_token({"sub": str(user.user_id), "username": user.username})
-    user_dict = user.dict()
+    user_dict = user.model_dump()
     user_dict.pop("password_hash", None)
     return {
         "access_token": access_token,
